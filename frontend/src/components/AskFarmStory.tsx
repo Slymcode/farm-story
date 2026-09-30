@@ -5,7 +5,7 @@ import { ApiError } from '@/api/client';
 import { Button, Card } from './ui';
 
 const SUGGESTIONS = [
-  'How can I improve my coffee farm?', 'What should I check if my coffee yield is low?',
+  'Why are these my recommended next steps?', 'How can I improve my coffee farm?', 'What should I check if my coffee yield is low?',
   'Why might soil testing be useful?', 'What should I discuss with an agronomist?',
 ];
 

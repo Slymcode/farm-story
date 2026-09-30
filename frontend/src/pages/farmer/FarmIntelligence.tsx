@@ -2,8 +2,9 @@ import { useState } from 'react';
 import { Link, useLocation, useParams } from 'react-router-dom';
 import { HelpCircle, MapPin, PartyPopper, X } from 'lucide-react';
 import { useFarm, useFarmerRequests } from '@/api/hooks';
+import { ActionPlan } from '@/components/ActionPlan';
 import { AskFarmStory } from '@/components/AskFarmStory';
-import { InsightCard, RecommendationCard, ServiceRequestCard } from '@/components/Insights';
+import { InsightCard, ServiceRequestCard } from '@/components/Insights';
 import { LazyFarmMap } from '@/components/LazyFarmMap';
 import { RequestDialog } from '@/components/RequestDialog';
 import { ScoreDialog } from '@/components/ScoreDialog';
@@ -81,9 +82,9 @@ export default function FarmIntelligence() {
                 <div className="space-y-3">{insight.insights.map((i) => <InsightCard key={i.title} item={i} />)}</div>
               </section>
               <section>
-                <SectionTitle hint="Prototype guidance — confirm important decisions with a qualified agronomist.">Recommended next steps</SectionTitle>
-                {insight.recommendations.length
-                  ? <div className="space-y-3">{insight.recommendations.map((r) => <RecommendationCard key={r.serviceType} rec={r} onAct={() => setRequestType(r.serviceType)} />)}</div>
+                <SectionTitle hint="Your recommended next steps, in priority order. Prototype guidance — confirm important decisions with a qualified agronomist.">My Farm Action Plan</SectionTitle>
+                {insight.actionPlan?.length
+                  ? <ActionPlan steps={insight.actionPlan} onRequest={setRequestType} />
                   : <EmptyState title="No specific steps right now" body="Nothing was flagged from your details. You can still request any service below." />}
               </section>
             </>

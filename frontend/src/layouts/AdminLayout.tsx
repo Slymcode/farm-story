@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
 import { ClipboardList, LayoutDashboard, Menu, Users, X } from 'lucide-react';
+import { ConnectionStatus } from '@/components/ConnectionStatus';
 import { DemoAccess } from '@/components/DemoAccess';
 import { Logo, cx } from '@/components/ui';
 
@@ -38,7 +39,7 @@ export default function AdminLayout() {
             <div className="lg:hidden"><Logo /></div>
             <p className="hidden font-display text-lg font-semibold text-forest-900 lg:block">Administrator Dashboard</p>
           </div>
-          <DemoAccess />
+          <div className="flex flex-wrap items-center justify-end gap-2"><ConnectionStatus /><DemoAccess /></div>
         </header>
         {open && (
           <div className="fixed inset-0 z-40 lg:hidden" role="dialog" aria-modal="true" aria-label="Navigation">

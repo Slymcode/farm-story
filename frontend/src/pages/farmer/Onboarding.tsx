@@ -6,6 +6,7 @@ import { ArrowLeft, ArrowRight, CheckCircle2, Sparkles } from 'lucide-react';
 import { ApiError } from '@/api/client';
 import { useCreateFarm, useCreateFarmer } from '@/api/hooks';
 import { Button, Card } from '@/components/ui';
+import { DraftConnectivityNotice } from '@/components/ConnectionStatus';
 import { ProgressIndicator } from '@/components/ProgressIndicator';
 import { COUNTY_CENTERS } from '@/lib/constants';
 import { clearDraft, loadDraft, saveDraft, useSession } from '@/lib/session';
@@ -84,6 +85,8 @@ export default function Onboarding() {
         <h1 ref={headingRef} tabIndex={-1} className="text-2xl font-bold outline-none sm:text-3xl">{TITLES[step]}</h1>
         {step === 0 && <Button variant="ghost" size="sm" icon={Sparkles} onClick={() => methods.reset(demoValues)} title="Prototype convenience: fills the form with the sample farmer from the brief">Fill demo data</Button>}
       </div>
+
+      <DraftConnectivityNotice />
 
       <FormProvider {...methods}>
         <form onSubmit={(e) => { e.preventDefault(); if (step === REVIEW) void submit(e); else void next(); }} noValidate className="mt-5" aria-label={TITLES[step]}>

@@ -2,8 +2,10 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { IdGeneratorService } from '../prisma/id-generator.service';
+import { requestsToCsv } from './service-request.export';
 import { CreateServiceRequestDto } from './dto/service-request.dto';
 
+const STATUSES = ['PENDING', 'IN_REVIEW', 'ASSIGNED', 'COMPLETED', 'CANCELLED'];
 const include = {
   farmer: { select: { id: true, farmerId: true, fullName: true, county: true, mobileNumber: true } },
   farm: { select: { id: true, farmName: true, location: true, latitude: true, longitude: true, primaryCrop: true, sizeAcres: true } },
@@ -39,6 +41,15 @@ export class ServiceRequestService {
       this.prisma.serviceRequest.findMany({ where, include, orderBy: { createdAt: 'desc' }, skip: (page - 1) * pageSize, take: pageSize }),
     ]);
     return { items, total, page, pageSize };
+  }
+
+  /** CSV of real database rows. Respects the same status / outstanding filters as the list (no pagination, capped). */
+  async exportCsv(q: { status?: string; outstanding?: string }) {
+    const where: Prisma.ServiceRequestWhereInput = {};
+    if (q.status && STATUSES.includes(q.status)) where.status = q.status as any;
+    else if (q.outstanding === 'true') where.status = { in: ['PENDING', 'IN_REVIEW', 'ASSIGNED'] };
+    const items = await this.prisma.serviceRequest.findMany({ where, include, orderBy: { createdAt: 'desc' }, take: 10000 });
+    return requestsToCsv(items);
   }
 
   async findOne(idOrRequestId: string) {

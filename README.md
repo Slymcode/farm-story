@@ -24,8 +24,10 @@ Everything in the prototype is real end to end: React → REST API → Prisma �
 - Human-readable Farmer ID (`FS-KEN-000001`) shown after registration
 - Coffee-only fields (varieties, tree count) appear only when Coffee is chosen
 - Leaflet + OpenStreetMap: tap the map, drag the marker, type coordinates, or use geolocation (denial handled gracefully)
-- Farm Intelligence: score ring, farm snapshot, "What we noticed", "Recommended next steps", **Why this score?** dialog
-- **Ask Farm Story** AI assistant (server-side, graceful when unavailable)
+- Farm Intelligence: score ring, farm snapshot, "What we noticed", **My Farm Action Plan**, **Why this score?** dialog
+- **My Farm Action Plan:** the engine's recommendations as a prioritised, numbered list with reasons and a one-tap request button per step
+- **Ask Farm Story** AI assistant (server-side, graceful when unavailable) that can explain the Action Plan
+- **Installable, offline-ready app shell (PWA)** with an Online / Offline indicator and a locally saved onboarding draft
 - Take Action → confirmation form → request ID (`FS-REQ-000021`) and status
 
 **Administrator**
@@ -33,6 +35,7 @@ Everything in the prototype is real end to end: React → REST API → Prisma �
 - Farmers by location (bar list + map of farm markers)
 - Searchable / filterable / paginated farmer table → farmer profile (farmer, farm, map, intelligence, requests)
 - Service request list with status filter and status updates
+- **Export CSV** of farmers and of service requests (real database data, respecting the current filters)
 
 **Prototype Demo Access** (Farmer / Admin switcher) is clearly labelled as **not production authentication**.
 
@@ -56,7 +59,11 @@ Everything in the prototype is real end to end: React → REST API → Prisma �
 ```text
 React (Vite) ──REST──> NestJS ──Prisma──> PostgreSQL
                           ├── FarmInsightEngine  (deterministic rules → score, insights, recommendations)
-                          └── AiService ──> AiProvider (Anthropic by default; optional, server-side only)
+                          │      └── Action Plan (derived view of the recommendations; no new rules)
+                          ├── AiService ──> AiProvider (explains the score + Action Plan; optional, server-side only)
+                          └── CSV export (farmers, service requests)
+
+Browser: service worker caches the app shell; onboarding draft lives in localStorage.
 ```
 
 **Why a modular monolith.** One deployable, one database transaction boundary, and one team-sized codebase is the fastest route to a reliable prototype. Modules (`farmer`, `farm`, `insight`, `service-request`, `ai`, `dashboard`, `prisma`) have clear boundaries, so high-load domains can be extracted later without a rewrite (see [Scalability](#scalability)). Microservices would add operational cost with no benefit at this size.
@@ -199,6 +206,7 @@ Swagger UI: `http://localhost:4000/api/docs`
 |---|---|---|
 | POST | `/api/farmers` | Register farmer (generates `FS-KEN-…`) |
 | GET | `/api/farmers` | List: `search`, `county`, `crop`, `page`, `pageSize` |
+| GET | `/api/farmers/export` | CSV download (same `search`, `county`, `crop` filters as the list) |
 | GET | `/api/farmers/:id` | Farmer + farms + insight + requests (UUID or `FS-KEN-…`) |
 | POST | `/api/farms` | Register farm (insight generated automatically) |
 | GET / PATCH | `/api/farms/:id` | Get / update (update regenerates insight) |
@@ -206,6 +214,7 @@ Swagger UI: `http://localhost:4000/api/docs`
 | POST | `/api/farms/:id/insight/generate` | Regenerate (upsert) |
 | POST | `/api/service-requests` | Create request (`FS-REQ-…`, status PENDING) |
 | GET | `/api/service-requests` | List: `status`, `farmerId`, `outstanding` |
+| GET | `/api/service-requests/export` | CSV download (`status` or `outstanding` filter) |
 | GET | `/api/service-requests/:id` | Get one |
 | PATCH | `/api/service-requests/:id/status` | Update status |
 | POST | `/api/ai/farm-question` | Ask the assistant |
@@ -261,6 +270,7 @@ Open the app and click **Try Demo Farmer Journey**, or **Start Farm Registration
 |---|---|---|
 | `npm run start:dev` | backend | API with reload |
 | `npm test` | backend | Jest unit tests |
+| `npm test` | frontend | Onboarding draft persistence tests (Node's built-in test runner, no extra dependency) |
 | `npm run build && npm run start:prod` | backend | Production build |
 | `npm run dev` / `npm run build` | frontend | Dev server / production bundle |
 
@@ -315,9 +325,33 @@ Cache reusable recommendations, process expensive work asynchronously, and never
 
 **Auditability (future).** Audit logs, role-based permissions, transaction and service-request history, AI recommendation history and data-change history. The prototype keeps only the current insight and current request status.
 
-## Offline Strategy
+## Offline / PWA
 
-Not implemented, but the design supports it. The prototype already keeps forms short, saves the onboarding draft locally, code-splits heavy assets, and retries safely (a failed farm save never re-registers the farmer). A full offline mode would add: a service worker to cache the app shell, **IndexedDB** for local records, an **offline form queue** of pending submissions, **background sync** when connectivity returns, and **conflict resolution** (server-generated IDs and last-write-wins per field, with review for conflicts) so the submission is idempotent.
+**What the prototype does.**
+- **Installable PWA:** web app manifest, icons (including maskable) and a service worker. Browsers that support it offer "Install app".
+- **Offline application shell:** the service worker precaches the built HTML, JS, CSS and icons, so the app opens and navigates without a connection. Navigations are network-first with the cached shell as fallback; hashed assets are cache-first. It is registered in production builds only (not in `vite dev`).
+- **Online / offline awareness:** a header indicator shows **Online** or **Offline — your draft is saved on this device**. During onboarding the form also says *"You're offline. Your draft is saved on this device."* and, when the connection returns, *"You're back online."*
+- **Locally persisted onboarding draft:** every change is saved to `localStorage` (`lib/draft.ts`, unit-tested), so a dropped connection, refresh or closed tab does not lose answers. The draft is cleared after a successful registration.
+
+**What it deliberately does not do.** The API, map tiles and all data are never cached or queued. **Farm registration cannot be submitted offline**: the farmer finishes the form when connectivity returns and submits normally (a failed save never registers the farmer twice). Offline service requests, background sync and conflict handling are not implemented.
+
+**Future production enhancements.** **IndexedDB**-backed offline entity storage (farmers, farms, requests), **queued submissions**, **background synchronisation** (Background Sync API with a fallback), **conflict resolution** (server-generated IDs, idempotency keys, last-write-wins per field with review for true conflicts), and **retry policies** (exponential backoff with user-visible status per queued item). A service-worker update prompt ("A new version is available") would also be added.
+
+## Data Export
+
+Admins get an **Export CSV** button on the **Farmers** and **Service requests** pages.
+- **Farmers CSV** (`GET /api/farmers/export`): Farmer ID, Full Name, Mobile, Email, County, Preferred Language, Farm Name, Farm Size, Primary Crop, Coffee Variety, Coffee Trees, Estimated Annual Production, Last Harvest Date, Challenges, Opportunity Score, Insight Status, Created At. One row per farm.
+- **Service requests CSV** (`GET /api/service-requests/export`): Request ID, Farmer ID, Farmer Name, Farm Name, Request Type, Status, Description, Created At, Updated At.
+- Data is read from PostgreSQL on the server at download time, so it always reflects the current database. The export **respects the filters currently applied** (farmer search/county/crop; request status).
+- Implementation is a ~30-line RFC 4180 writer (no dependency), UTF-8 with BOM so Excel opens it correctly, and values that could be read as spreadsheet formulas are neutralised. Exports are capped at 10,000 rows; beyond that a production system would stream or generate exports as background jobs.
+- Prototype note: the export endpoints are open like the rest of the API. Production would restrict them to authenticated administrators and audit-log each export.
+
+## Farm Action Plan
+
+**My Farm Action Plan** turns the engine's recommendations into a numbered, prioritised list on the Farm Intelligence page, each with its reason and a button that opens the existing service-request flow.
+- **The deterministic `FarmInsightEngine` remains authoritative.** The plan is a derived view (`insight/action-plan.ts`) of the engine's recommendations; it adds no rules. Each service step is one engine recommendation with the engine's own reason. If the engine returns no recommendations, there is no plan: nothing is invented to fill slots.
+- **Priority:** services backed by more reported reasons come first; ties keep the engine's order. A final **Review production efficiency** step (no button) appears only when the engine has calculated a production metric, and uses the engine's benchmark note; it makes no judgement about whether production is good or bad.
+- **AI is an explanation and conversation layer only.** Ask Farm Story (the existing assistant, not a new chatbot) now receives the farm context, score, score breakdown, insights, recommendations and action plan on the server, and the suggested question *"Why are these my recommended next steps?"* explains them in plain language. The prompt forbids changing the score or plan, inventing soil, weather, satellite or market data, claiming certainty, or saying a service has been booked or completed. Personal identifiers (surname, phone, email) are never sent. The API key never reaches the browser.
 
 ## Known Limitations
 
@@ -330,7 +364,9 @@ Not implemented, but the design supports it. The prototype already keeps forms s
 - No real payments and no buyer marketplace.
 - Map tiles depend on OpenStreetMap availability (the form still works with typed coordinates).
 - One insight per farm (no history); no audit log.
-- Offline synchronisation is proposed, not implemented.
+- Offline support is limited to the app shell and a local onboarding draft; offline submissions, sync and conflict resolution are not implemented. A service worker only takes effect on production builds served over HTTPS (or localhost).
+- CSV export endpoints are not access-controlled (no production authentication) and are capped at 10,000 rows.
+- The Action Plan explanation path was verified with a mocked AI provider only; it has not been exercised against a live model.
 - Seed data is fictional. Farm-level "soil test recent" uses a 24-month prototype threshold, not an agronomic standard.
 - The backend uses Prisma's engine-less client with the `pg` driver adapter (`engineType = "client"`), which is what the checked-in setup was verified against.
 

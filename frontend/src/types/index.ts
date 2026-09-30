@@ -16,10 +16,11 @@ export interface ScoreBreakdown {
   metrics: { productionPerTreeKg: number | null; treesPerAcre: number | null; productionPerAcreKg: number | null };
   availableInformation: string[]; missingInformation: string[]; disclaimer: string;
 }
+export interface ActionPlanStep { step: number; title: string; description?: string; reason: string; serviceType: ServiceType | null; kind: 'service' | 'review' }
 export interface FarmInsight {
   id: string; farmId: string; opportunityScore: number; healthStatus: HealthStatus; statusLabel: string; summary: string;
   insights: InsightItem[]; recommendations: Recommendation[]; scoreBreakdown: ScoreBreakdown | null;
-  generatedAt: string; disclaimer: string;
+  generatedAt: string; disclaimer: string; actionPlan?: ActionPlanStep[];
 }
 export interface Farm {
   id: string; farmerId: string; farmName: string; location: string; latitude: number; longitude: number; sizeAcres: number;

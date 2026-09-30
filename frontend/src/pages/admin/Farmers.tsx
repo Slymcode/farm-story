@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search } from 'lucide-react';
-import { useFarmers } from '@/api/hooks';
+import { exportCsv, useFarmers } from '@/api/hooks';
+import { ExportCsvButton } from '@/components/ExportCsvButton';
 import { Button, Card, EmptyState, ErrorState, LoadingState } from '@/components/ui';
 import { COUNTIES, CROPS, cropLabel } from '@/lib/constants';
 import { date, initials, num } from '@/lib/format';
@@ -19,7 +20,10 @@ export default function Farmers() {
 
   return (
     <div className="space-y-5">
-      <div><h1 className="text-3xl font-bold">Farmers</h1><p className="text-ink-700">Search and filter everyone who has registered.</p></div>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div><h1 className="text-3xl font-bold">Farmers</h1><p className="text-ink-700">Search and filter everyone who has registered.</p></div>
+        <ExportCsvButton label="Export CSV" hint="Downloads the farmers matching the current search and filters" run={() => exportCsv('farmers', { search: q, county, crop })} />
+      </div>
       <Card className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center">
         <div className="relative flex-1"><Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-ink-500" aria-hidden />
           <label htmlFor="fsearch" className="sr-only">Search by name, farmer ID or farm</label>

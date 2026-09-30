@@ -1,4 +1,6 @@
-import { Body, Controller, Get, HttpCode, Param, Patch, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Param, Patch, Post, Query, Res } from '@nestjs/common';
+import type { Response } from 'express';
+import { sendCsv } from '../common/csv';
 import { ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { ResponseMessage } from '../common/response';
 import { CreateServiceRequestDto, UpdateRequestStatusDto } from './dto/service-request.dto';
@@ -18,6 +20,12 @@ export class ServiceRequestController {
   @ApiOperation({ summary: 'List service requests; filter by status, farmerId, or outstanding=true' })
   @ApiQuery({ name: 'status', required: false }) @ApiQuery({ name: 'farmerId', required: false }) @ApiQuery({ name: 'outstanding', required: false })
   list(@Query() q: any) { return this.requests.list(q); }
+
+  // Declared before ':id' so "export" is never treated as an id.
+  @Get('export')
+  @ApiOperation({ summary: 'Download service requests as CSV. Respects the status / outstanding filters.' })
+  @ApiQuery({ name: 'status', required: false }) @ApiQuery({ name: 'outstanding', required: false })
+  async export(@Query() q: any, @Res() res: Response) { sendCsv(res, 'farm-story-service-requests', await this.requests.exportCsv(q)); }
 
   @Get(':id') @ResponseMessage('Service request loaded')
   @ApiOperation({ summary: 'Get a service request (UUID or FS-REQ-… ID)' })

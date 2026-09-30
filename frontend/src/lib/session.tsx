@@ -29,8 +29,5 @@ export function useSession() {
   return c;
 }
 
-/** Draft of the onboarding form so a refresh or dropped connection doesn't lose the farmer's answers. */
-const DRAFT = 'farmstory.onboarding-draft.v1';
-export const loadDraft = <T,>(): { values: T; step: number } | null => { try { return JSON.parse(localStorage.getItem(DRAFT) ?? 'null'); } catch { return null; } };
-export const saveDraft = (d: unknown) => { try { localStorage.setItem(DRAFT, JSON.stringify(d)); } catch { /* ignore */ } };
-export const clearDraft = () => { try { localStorage.removeItem(DRAFT); } catch { /* ignore */ } };
+/** Onboarding draft persistence lives in lib/draft.ts (pure + tested); re-exported here so existing imports keep working. */
+export { clearDraft, loadDraft, saveDraft } from './draft';

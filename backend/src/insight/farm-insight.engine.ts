@@ -1,7 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import {
-  ChallengeName, FarmInsightInput, FarmInsightResult, HealthStatusName, InsightItem, Recommendation, ScoreDimension, ServiceTypeName,
+  BENCHMARK_NOTE, ChallengeName, FarmInsightInput, FarmInsightResult, HealthStatusName, InsightItem, Recommendation, ScoreDimension, ServiceTypeName,
 } from './insight.types';
+import { buildActionPlan } from './action-plan';
 
 /* -------------------------------------------------------------------------------------------
  * FARM INSIGHT ENGINE — deterministic, explainable, easy to change.
@@ -48,8 +49,6 @@ const SERVICE_META: Record<ServiceTypeName, { title: string; description: string
 };
 const SERVICE_ORDER: ServiceTypeName[] = ['AGRONOMIST_VISIT', 'SOIL_TEST', 'BIOCHAR_ASSESSMENT', 'COFFEE_QUALITY_ASSESSMENT', 'BUYER_OFFTAKE_SUPPORT'];
 
-const BENCHMARK_NOTE =
-  "Production efficiency should be reviewed against local agronomic benchmarks for the farm's variety, environment and management practices.";
 
 export const STATUS_LABELS: Record<HealthStatusName, string> = {
   STRONG_POSITION: 'Lower opportunity — few gaps identified',
@@ -188,7 +187,7 @@ export class FarmInsightEngine {
   }
 }
 
-/** Adds the display label and disclaimer to a stored insight row. Used everywhere an insight leaves the API. */
+/** Adds the display label, disclaimer and derived action plan to a stored insight row. Used everywhere an insight leaves the API. */
 export function presentInsight<T extends { healthStatus: HealthStatusName }>(i: T | null | undefined) {
-  return i ? { ...i, statusLabel: STATUS_LABELS[i.healthStatus], disclaimer: DISCLAIMER } : null;
+  return i ? { ...i, statusLabel: STATUS_LABELS[i.healthStatus], disclaimer: DISCLAIMER, actionPlan: buildActionPlan(i as any) } : null;
 }

@@ -41,3 +41,7 @@ export interface FarmInsightResult {
   opportunityScore: number; healthStatus: HealthStatusName; statusLabel: string; summary: string;
   insights: InsightItem[]; recommendations: Recommendation[]; scoreBreakdown: ScoreBreakdown;
 }
+
+/** Shown whenever production per tree/acre is reported. Never a verdict, always a prompt to compare with local benchmarks. */
+export const BENCHMARK_NOTE =
+  "Production efficiency should be reviewed against local agronomic benchmarks for the farm's variety, environment and management practices.";

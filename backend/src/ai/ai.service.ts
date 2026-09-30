@@ -1,6 +1,7 @@
 import { Inject, Injectable, Logger, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AI_PROVIDER, AiProvider } from './ai.provider';
+import { presentInsight } from '../insight/farm-insight.engine';
 import { SYSTEM_PROMPT, UNAVAILABLE_MESSAGE } from './ai.prompt';
 
 const LABELS: Record<string, string> = {
@@ -17,8 +18,10 @@ export class AiService {
   async buildContext(farmId: string) {
     const farm = await this.prisma.farm.findUnique({ where: { id: farmId }, include: { farmer: true, insight: true } });
     if (!farm) throw new NotFoundException('We could not find this farm.');
+    const presented = presentInsight(farm.insight);
     const insights = (farm.insight?.insights as any[]) ?? [];
     const recs = (farm.insight?.recommendations as any[]) ?? [];
+    const breakdown = farm.insight?.scoreBreakdown as any;
     return {
       farmerFirstName: farm.farmer.fullName.split(' ')[0],
       county: `${farm.farmer.county} County`,
@@ -31,6 +34,10 @@ export class AiService {
       scoreNote: 'Prototype rule-based indicator; higher means more areas where support could help.',
       existingInsights: insights.map((i) => `${i.title}: ${i.description}`),
       recommendations: recs.map((r) => `${r.title} — ${r.reason}`),
+      // The deterministic engine's own breakdown and prioritised action plan. The AI explains these; it never changes them.
+      scoreBreakdown: (breakdown?.dimensions as any[] | undefined)?.map((d) => `${d.label}: ${d.points}/${d.max} — ${d.explanation}`) ?? [],
+      missingInformation: (breakdown?.missingInformation as string[] | undefined) ?? [],
+      actionPlan: (presented?.actionPlan ?? []).map((s) => `${s.step}. ${s.title} — ${s.reason}`),
       notAvailable: ['weather data', 'satellite data', 'soil lab results', 'market prices'],
     };
   }

@@ -23,3 +23,15 @@ export async function api<T>(path: string, init?: RequestInit & { json?: unknown
   }
   return body.data as T;
 }
+
+/** Downloads a CSV produced by the server (real database state) through the browser's normal download flow. */
+export async function downloadCsv(path: string, filename: string): Promise<void> {
+  let res: Response;
+  try { res = await fetch(`${BASE}${path}`, { headers: { Accept: 'text/csv' } }); }
+  catch { throw new ApiError('We could not reach Farm Story. Please check your connection and try again.', 'NETWORK_ERROR', 0); }
+  if (!res.ok) throw new ApiError('The export could not be created. Please try again.', 'EXPORT_ERROR', res.status);
+  const url = URL.createObjectURL(await res.blob());
+  const a = document.createElement('a');
+  a.href = url; a.download = filename; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}

@@ -1,5 +1,5 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { api } from './client';
+import { api, downloadCsv } from './client';
 import type { AiAnswer, DashboardSummary, Farm, Farmer, FarmerDetail, FarmerRow, LocationSummary, Paged, RequestStatus, ServiceRequest, ServiceType } from '@/types';
 
 const qs = (o: Record<string, string | number | undefined>) => {
@@ -44,3 +44,8 @@ export const useFarmers = (f: { search?: string; county?: string; crop?: string;
 export const useRequests = (status?: string) =>
   useQuery({ queryKey: ['requests', 'admin', status], queryFn: () => api<Paged<ServiceRequest>>(`/service-requests${qs({ status })}`), placeholderData: keepPreviousData });
 export const useOutstanding = () => useQuery({ queryKey: ['dashboard', 'outstanding'], queryFn: () => api<Paged<ServiceRequest>>('/dashboard/service-requests') });
+
+/** Builds the export path from the same filters the admin table is currently showing. */
+export const exportPath = (resource: 'farmers' | 'service-requests', f: Record<string, string | number | undefined>) => `/${resource}/export${qs(f)}`;
+export const exportCsv = (resource: 'farmers' | 'service-requests', f: Record<string, string | number | undefined>) =>
+  downloadCsv(exportPath(resource, f), `farm-story-${resource}-${new Date().toISOString().slice(0, 10)}.csv`);

@@ -3,8 +3,10 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { IdGeneratorService } from '../prisma/id-generator.service';
 import { presentInsight } from '../insight/farm-insight.engine';
+import { farmersToCsv } from './farmer.export';
 import { CreateFarmerDto } from './dto/create-farmer.dto';
 
+const EXPORT_LIMIT = 10000;
 export interface ListFarmersQuery { search?: string; county?: string; crop?: string; page?: number; pageSize?: number }
 
 @Injectable()
@@ -33,17 +35,7 @@ export class FarmerService {
   async list(q: ListFarmersQuery) {
     const page = Math.max(1, Number(q.page) || 1);
     const pageSize = Math.min(100, Math.max(1, Number(q.pageSize) || 20));
-    const where: Prisma.FarmerWhereInput = {};
-    if (q.search?.trim()) {
-      const s = q.search.trim();
-      where.OR = [
-        { fullName: { contains: s, mode: 'insensitive' } },
-        { farmerId: { contains: s, mode: 'insensitive' } },
-        { farms: { some: { farmName: { contains: s, mode: 'insensitive' } } } },
-      ];
-    }
-    if (q.county) where.county = q.county;
-    if (q.crop) where.farms = { some: { primaryCrop: q.crop as any } };
+    const where = this.buildWhere(q);
 
     const [total, rows] = await this.prisma.$transaction([
       this.prisma.farmer.count({ where }),
@@ -66,5 +58,30 @@ export class FarmerService {
       };
     });
     return { items, total, page, pageSize };
+  }
+
+  /** Shared by the admin list and the CSV export so exports respect the same filters. */
+  private buildWhere(q: ListFarmersQuery): Prisma.FarmerWhereInput {
+    const where: Prisma.FarmerWhereInput = {};
+    if (q.search?.trim()) {
+      const s = q.search.trim();
+      where.OR = [
+        { fullName: { contains: s, mode: 'insensitive' } },
+        { farmerId: { contains: s, mode: 'insensitive' } },
+        { farms: { some: { farmName: { contains: s, mode: 'insensitive' } } } },
+      ];
+    }
+    if (q.county) where.county = q.county;
+    if (q.crop) where.farms = { some: { primaryCrop: q.crop as any } };
+    return where;
+  }
+
+  /** CSV of real database rows (same filters as the list, no pagination, capped for safety). */
+  async exportCsv(q: ListFarmersQuery) {
+    const farmers = await this.prisma.farmer.findMany({
+      where: this.buildWhere(q), orderBy: { createdAt: 'desc' }, take: EXPORT_LIMIT,
+      include: { farms: { orderBy: { createdAt: 'asc' }, include: { insight: { select: { opportunityScore: true, healthStatus: true } } } } },
+    });
+    return farmersToCsv(farmers);
   }
 }

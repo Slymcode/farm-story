@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { useRequests, useUpdateRequestStatus } from '@/api/hooks';
+import { exportCsv, useRequests, useUpdateRequestStatus } from '@/api/hooks';
+import { ExportCsvButton } from '@/components/ExportCsvButton';
 import { Card, EmptyState, ErrorState, LoadingState, StatusBadge, cx } from '@/components/ui';
 import { SERVICES, STATUSES, STATUS_LABEL } from '@/lib/constants';
 import { date } from '@/lib/format';
@@ -12,7 +13,10 @@ export default function Requests() {
   const update = useUpdateRequestStatus();
   return (
     <div className="space-y-5">
-      <div><h1 className="text-3xl font-bold">Service requests</h1><p className="text-ink-700">Review requests from farmers and update their status.</p></div>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div><h1 className="text-3xl font-bold">Service requests</h1><p className="text-ink-700">Review requests from farmers and update their status.</p></div>
+        <ExportCsvButton label="Export CSV" hint="Downloads the service requests matching the current status filter" run={() => exportCsv('service-requests', { status })} />
+      </div>
       <div role="group" aria-label="Filter by status" className="flex flex-wrap gap-2">
         {['', ...STATUSES].map((s) => (
           <button key={s || 'all'} aria-pressed={status === s} onClick={() => setStatus(s)} className={cx('min-h-10 rounded-full border-2 px-4 text-sm font-semibold', status === s ? 'border-forest-800 bg-forest-800 text-cream-50' : 'border-cream-300 bg-white text-ink-700')}>{s ? STATUS_LABEL[s as RequestStatus] : 'All'}</button>
