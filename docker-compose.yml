@@ -1,0 +1,21 @@
+# PostgreSQL only. The API and frontend run locally with npm.
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: farmstory-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: farmstory
+      POSTGRES_PASSWORD: farmstory
+      POSTGRES_DB: farmstory
+    ports:
+      - "5432:5432"
+    volumes:
+      - farmstory-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U farmstory"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+volumes:
+  farmstory-pgdata:
