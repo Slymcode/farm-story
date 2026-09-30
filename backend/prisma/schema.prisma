@@ -1,0 +1,135 @@
+generator client {
+  provider        = "prisma-client-js"
+  engineType      = "client"
+  previewFeatures = ["queryCompiler", "driverAdapters"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum CropType {
+  COFFEE
+  MAIZE
+  BEANS
+  TEA
+  OTHER
+}
+enum Challenge {
+  LOW_YIELD
+  PESTS_DISEASE
+  SOIL_QUALITY
+  WATER_AVAILABILITY
+  BUYER_ACCESS
+  FINANCE_ACCESS
+  INPUT_COSTS
+}
+enum ServiceType {
+  AGRONOMIST_VISIT
+  SOIL_TEST
+  BIOCHAR_ASSESSMENT
+  COFFEE_QUALITY_ASSESSMENT
+  BUYER_OFFTAKE_SUPPORT
+}
+enum RequestStatus {
+  PENDING
+  IN_REVIEW
+  ASSIGNED
+  COMPLETED
+  CANCELLED
+}
+enum HealthStatus {
+  STRONG_POSITION
+  MODERATE_OPPORTUNITY
+  HIGH_OPPORTUNITY
+}
+
+/// Atomic counters used to mint human-readable IDs (FS-KEN-000001, FS-REQ-000001) without races.
+model Counter {
+  name  String @id
+  value Int    @default(0)
+}
+
+model Farmer {
+  id                String   @id @default(uuid())
+  farmerId          String   @unique
+  fullName          String
+  mobileNumber      String
+  email             String?
+  country           String   @default("Kenya")
+  county            String
+  region            String?
+  preferredLanguage String
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  farms           Farm[]
+  serviceRequests ServiceRequest[]
+
+  @@index([county])
+  @@index([createdAt])
+}
+
+model Farm {
+  id                          String      @id @default(uuid())
+  farmerId                    String
+  farmName                    String
+  location                    String
+  latitude                    Float
+  longitude                   Float
+  sizeAcres                   Float
+  primaryCrop                 CropType
+  coffeeVariety               String[]
+  coffeeTrees                 Int?
+  estimatedAnnualProductionKg Float?
+  lastHarvestDate             DateTime?
+  lastSoilTestDate            DateTime?
+  challenges                  Challenge[]
+  createdAt                   DateTime    @default(now())
+  updatedAt                   DateTime    @updatedAt
+
+  farmer          Farmer           @relation(fields: [farmerId], references: [id], onDelete: Cascade)
+  insight         FarmInsight?
+  serviceRequests ServiceRequest[]
+
+  @@index([farmerId])
+  @@index([primaryCrop])
+  @@index([createdAt])
+}
+
+/// One current insight per farm (upserted on regeneration). History is intentionally not kept.
+model FarmInsight {
+  id               String       @id @default(uuid())
+  farmId           String       @unique
+  opportunityScore Int
+  healthStatus     HealthStatus
+  summary          String
+  insights         Json
+  recommendations  Json
+  scoreBreakdown   Json?
+  generatedAt      DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  farm Farm @relation(fields: [farmId], references: [id], onDelete: Cascade)
+}
+
+model ServiceRequest {
+  id          String        @id @default(uuid())
+  requestId   String        @unique
+  farmerId    String
+  farmId      String
+  type        ServiceType
+  status      RequestStatus @default(PENDING)
+  description String?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  farmer Farmer @relation(fields: [farmerId], references: [id], onDelete: Cascade)
+  farm   Farm   @relation(fields: [farmId], references: [id], onDelete: Cascade)
+
+  @@index([farmerId])
+  @@index([farmId])
+  @@index([status])
+  @@index([createdAt])
+}
