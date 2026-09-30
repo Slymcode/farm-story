@@ -281,6 +281,14 @@ Frontend: any static host (`npm run build` → `dist/`) with `VITE_API_URL` set.
 
 **Millions of farm records.** Proper indexes and query plans; pagination everywhere (cursor-based for large tables); partitioning only where justified (e.g. by time for events/insights history); read replicas for admin/analytics; archival of old requests; object storage for files; analytics read models kept separate from the transactional schema.
 
+**Large maps (100,000+ farms).** The prototype's admin map endpoint (`GET /api/dashboard/locations`) deliberately returns every farm marker in one response, which is simple and fine for a demo-sized dataset. It would not survive 100,000+ farms: the payload, the database query and the browser's marker rendering would all become bottlenecks. A production system would optimise by geographic viewport and zoom level instead of shipping every record:
+- **Viewport / bounding-box queries:** the client sends the visible bounds and zoom; the server returns only farms inside them (backed by a spatial index such as PostGIS `GIST`).
+- **Server-side filtering and pagination:** filter by county, crop, status or challenge on the server, and page or cap results rather than returning every farm record.
+- **Clustering and aggregation:** at low zoom return counts or grid/geohash aggregates (e.g. "312 farms in this cell"), and only individual markers once zoomed in.
+- **Vector tiles where appropriate:** for very dense layers, serve pre-generated or on-demand vector tiles (e.g. PostGIS `ST_AsMVT`) so the browser renders only what is on screen.
+
+The prototype intentionally keeps the map simple; the production design would make rendering cost depend on what is visible, not on the total number of farms.
+
 **Weather / satellite.**
 ```text
 External providers → Ingestion workers → Queue → Processing pipeline → Farm environmental data → Recommendation engine → Farmer / Admin
@@ -292,6 +300,14 @@ Ingestion never blocks normal API requests.
 Farm data → Feature extraction → Recommendation service → AI model/API → Recommendation store → Farmer
 ```
 Cache reusable recommendations, process expensive work asynchronously, and never call a model on a dashboard page load.
+
+**AI rate limiting and cost control (not implemented).** The prototype has no per-user AI quotas, no rate limiting, no cost controls and no detailed AI usage monitoring, so anyone who can reach the API can trigger model calls against the configured key. Production would add:
+- authenticated access to the AI endpoint;
+- per-user and per-application quotas;
+- rate limiting (per user and per IP) at the API gateway or application layer;
+- usage monitoring: tokens, cost, latency and error rates per user, with alerts;
+- cost controls such as spend caps, input/output token limits and a kill switch;
+- potentially asynchronous AI processing (queue + worker) for expensive or bulk workflows.
 
 **Payments (future, out of scope).** Separate payment service, provider integration, webhook processing, transaction records, idempotency keys, reconciliation and audit logs.
 
@@ -309,6 +325,8 @@ Not implemented, but the design supports it. The prototype already keeps forms s
 - AI advice is general decision support and must be validated by professionals.
 - No real weather, satellite, soil-lab or market-price integration.
 - No production authentication (role switcher only); no per-user authorisation on the API.
+- No AI rate limiting, per-user quotas, cost controls or AI usage monitoring (see [Scalability](#scalability)).
+- The admin map returns all farm markers in one response; viewport queries, clustering and pagination would be needed beyond demo-scale data.
 - No real payments and no buyer marketplace.
 - Map tiles depend on OpenStreetMap availability (the form still works with typed coordinates).
 - One insight per farm (no history); no audit log.

@@ -1,7 +1,7 @@
 import 'reflect-metadata';
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
-import { CreateFarmDto } from './dto/farm.dto';
+import { CreateFarmDto, UpdateFarmDto, isNotFutureDate } from './dto/farm.dto';
 
 const base = {
   farmerId: 'abc', farmName: "John's Coffee Farm", location: 'Nyeri County, Kenya', latitude: -0.42, longitude: 36.95,
@@ -30,5 +30,34 @@ describe('CreateFarmDto', () => {
   });
   it('rejects an unknown challenge', async () => {
     expect(await fields({ ...base, challenges: ['DRAGONS'] })).toEqual(['challenges']);
+  });
+});
+
+const isoDay = (offsetDays: number) => new Date(Date.now() + offsetDays * 86400000).toISOString().slice(0, 10);
+
+describe('future-date validation', () => {
+  it('accepts a valid past date', async () => {
+    expect(await fields({ ...base, lastHarvestDate: '2024-06-01', lastSoilTestDate: '2023-01-15' })).toEqual([]);
+  });
+  it("accepts today's date", async () => {
+    expect(await fields({ ...base, lastHarvestDate: isoDay(0), lastSoilTestDate: isoDay(0) })).toEqual([]);
+  });
+  it('rejects future dates', async () => {
+    expect(await fields({ ...base, lastHarvestDate: isoDay(3) })).toEqual(['lastHarvestDate']);
+    expect(await fields({ ...base, lastSoilTestDate: isoDay(30) })).toEqual(['lastSoilTestDate']);
+  });
+  it('still treats blank dates as "unknown" and rejects malformed ones', async () => {
+    expect(await fields({ ...base, lastHarvestDate: '', lastSoilTestDate: '' })).toEqual([]);
+    expect(await fields({ ...base, lastHarvestDate: 'not-a-date' })).toEqual(['lastHarvestDate']);
+  });
+  it('applies to PATCH updates too', async () => {
+    const errs = await validate(plainToInstance(UpdateFarmDto, { lastSoilTestDate: isoDay(5) }));
+    expect(errs.map((e) => e.property)).toEqual(['lastSoilTestDate']);
+  });
+  it('helper compares by calendar day against a fixed clock', () => {
+    const now = Date.parse('2026-09-30T12:00:00Z');
+    expect(isNotFutureDate('2026-09-30', now)).toBe(true);
+    expect(isNotFutureDate('2026-09-29T23:00:00Z', now)).toBe(true);
+    expect(isNotFutureDate('2026-10-02', now)).toBe(false);
   });
 });

@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional, PartialType, OmitType } from '@nestjs/swagger';
 import { Transform, Type } from 'class-transformer';
-import { ArrayMaxSize, IsArray, IsDateString, IsEnum, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
+import { ArrayMaxSize, IsArray, IsDateString, IsEnum, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, Max, MaxLength, Min, registerDecorator, ValidationOptions } from 'class-validator';
 
 export enum CropTypeDto { COFFEE = 'COFFEE', MAIZE = 'MAIZE', BEANS = 'BEANS', TEA = 'TEA', OTHER = 'OTHER' }
 export enum ChallengeDto {
@@ -11,6 +11,21 @@ export enum ChallengeDto {
 const trim = ({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim() : value);
 /** Blank strings from forms become undefined so optional numeric/date fields validate cleanly. */
 const blank = ({ value }: { value: unknown }) => (value === '' || value === null ? undefined : value);
+
+/**
+ * Rejects dates after today. Compared by calendar day against the latest timezone on Earth
+ * (UTC+14), so a farmer whose local "today" is already ahead of UTC is never wrongly rejected.
+ */
+export function isNotFutureDate(value: unknown, now: number = Date.now()): boolean {
+  if (typeof value !== 'string') return false;
+  const day = value.slice(0, 10);
+  const latestToday = new Date(now + 14 * 3600 * 1000).toISOString().slice(0, 10);
+  return day <= latestToday;
+}
+export function NotFutureDate(options?: ValidationOptions) {
+  return (object: object, propertyName: string) =>
+    registerDecorator({ name: 'notFutureDate', target: object.constructor, propertyName, options, validator: { validate: (v) => isNotFutureDate(v) } });
+}
 
 export class CreateFarmDto {
   @ApiProperty({ description: 'Farmer UUID or public Farm Story ID (FS-KEN-000001)' })
@@ -56,11 +71,11 @@ export class CreateFarmDto {
   estimatedAnnualProductionKg?: number;
 
   @ApiPropertyOptional({ example: '2025-12-15' })
-  @Transform(blank) @IsOptional() @IsDateString({}, { message: 'Please enter a valid harvest date.' })
+  @Transform(blank) @IsOptional() @IsDateString({}, { message: 'Please enter a valid harvest date.' }) @NotFutureDate({ message: 'Harvest date cannot be in the future.' })
   lastHarvestDate?: string;
 
   @ApiPropertyOptional({ example: '2024-03-01', description: 'Leave empty if unknown' })
-  @Transform(blank) @IsOptional() @IsDateString({}, { message: 'Please enter a valid soil test date.' })
+  @Transform(blank) @IsOptional() @IsDateString({}, { message: 'Please enter a valid soil test date.' }) @NotFutureDate({ message: 'Soil test date cannot be in the future.' })
   lastSoilTestDate?: string;
 
   @ApiProperty({ enum: ChallengeDto, isArray: true, example: ['LOW_YIELD'] })
