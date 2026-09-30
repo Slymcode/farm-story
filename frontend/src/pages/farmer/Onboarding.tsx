@@ -86,7 +86,7 @@ export default function Onboarding() {
       </div>
 
       <FormProvider {...methods}>
-        <form onSubmit={submit} noValidate className="mt-5" aria-label={TITLES[step]}>
+        <form onSubmit={(e) => { e.preventDefault(); if (step === REVIEW) void submit(e); else void next(); }} noValidate className="mt-5" aria-label={TITLES[step]}>
           <Card className="p-4 sm:p-6">
             {step === 0 && <StepFarmer />}
             {step === 1 && <StepFarm />}
@@ -101,8 +101,8 @@ export default function Onboarding() {
           <div className="sticky bottom-0 -mx-4 mt-6 flex gap-3 border-t border-cream-200 bg-cream-50/95 px-4 py-3 backdrop-blur sm:static sm:mx-0 sm:border-0 sm:bg-transparent sm:px-0 sm:py-0">
             {step > 0 && <Button variant="secondary" icon={ArrowLeft} onClick={() => goTo(step - 1)} disabled={busy}>Back</Button>}
             {step < REVIEW
-              ? <Button className="flex-1" onClick={next}>Continue<ArrowRight className="size-4" aria-hidden /></Button>
-              : <Button type="submit" className="flex-1" loading={busy} icon={CheckCircle2}>{busy ? 'Saving your farm…' : submitError ? 'Try again' : 'Confirm and create my farm profile'}</Button>}
+              ? <Button key="continue" className="flex-1" onClick={next}>Continue<ArrowRight className="size-4" aria-hidden /></Button>
+ : <Button key="confirm" type="submit" className="flex-1" loading={busy} icon={CheckCircle2}>{busy ? 'Saving your farm…' : submitError ? 'Try again' : 'Confirm and create my farm profile'}</Button>}
           </div>
         </form>
       </FormProvider>
