@@ -16,6 +16,12 @@ const Dashboard = lazy(() => import('@/pages/admin/Dashboard'));
 const Farmers = lazy(() => import('@/pages/admin/Farmers'));
 const FarmerProfile = lazy(() => import('@/pages/admin/FarmerProfile'));
 const Requests = lazy(() => import('@/pages/admin/Requests'));
+const AdminRequestDetail = lazy(() => import('@/pages/admin/RequestDetail'));
+const Agronomists = lazy(() => import('@/pages/admin/Agronomists'));
+const AgronomistLayout = lazy(() => import('@/layouts/AgronomistLayout'));
+const AgronomistDashboard = lazy(() => import('@/pages/agronomist/Dashboard'));
+const AgronomistRequestDetail = lazy(() => import('@/pages/agronomist/RequestDetail'));
+const PassportPage = lazy(() => import('@/pages/PassportPage'));
 
 export default function App() {
   return (
@@ -42,7 +48,16 @@ export default function App() {
           <Route path="farmers" element={<Farmers />} />
           <Route path="farmers/:id" element={<FarmerProfile />} />
           <Route path="requests" element={<Requests />} />
+          <Route path="requests/:id" element={<AdminRequestDetail />} />
+          <Route path="agronomists" element={<Agronomists />} />
         </Route>
+        {/* Agronomist Workspace: Prototype Demo Access ("viewing as"), no agronomist login. */}
+        <Route path="agronomist" element={<AgronomistLayout />}>
+          <Route index element={<AgronomistDashboard />} />
+          <Route path="requests/:id" element={<AgronomistRequestDetail />} />
+        </Route>
+        {/* Public, privacy-safe Farm Passport: no login, own minimal layout. */}
+        <Route path="passport/:publicId" element={<PassportPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Suspense>

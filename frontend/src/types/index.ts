@@ -25,12 +25,16 @@ export interface FarmInsight {
 export interface Farm {
   id: string; farmerId: string; farmName: string; location: string; latitude: number; longitude: number; sizeAcres: number;
   primaryCrop: Crop; coffeeVariety: string[]; coffeeTrees: number | null; estimatedAnnualProductionKg: number | null;
-  lastHarvestDate: string | null; lastSoilTestDate: string | null; challenges: Challenge[]; createdAt: string;
+  lastHarvestDate: string | null; lastSoilTestDate: string | null; challenges: Challenge[]; createdAt: string; publicId?: string;
   farmer?: Farmer; insight?: FarmInsight | null;
 }
 export interface ServiceRequest {
   id: string; requestId: string; farmerId: string; farmId: string; type: ServiceType; status: RequestStatus;
   description: string | null; createdAt: string;
+  assignedAgronomistId?: string | null; assignedAt?: string | null;
+  agronomist?: { id: string; fullName: string; county: string | null } | null;
+  /** Only present on the detail endpoints. */
+  assessment?: Assessment | null; events?: RequestEvent[];
   farmer?: { id: string; farmerId: string; fullName: string; county: string; mobileNumber: string };
   farm?: { id: string; farmName: string; location: string; latitude: number; longitude: number; primaryCrop: Crop; sizeAcres: number };
 }
@@ -53,3 +57,30 @@ export interface LocationSummary {
   markers: { farmId: string; farmerId: string; farmName: string; farmerName: string; county: string; latitude: number; longitude: number; primaryCrop: Crop; sizeAcres: number }[];
 }
 export interface AiAnswer { answer: string; disclaimer: string; generatedAt: string }
+
+export type RequestEventType = 'REQUEST_CREATED' | 'REQUEST_REVIEWED' | 'AGRONOMIST_ASSIGNED' | 'ASSESSMENT_SUBMITTED' | 'REQUEST_COMPLETED' | 'REQUEST_CANCELLED';
+export interface RequestEvent { id: string; type: RequestEventType; fromStatus: RequestStatus | null; toStatus: RequestStatus | null; actorRole: string; actorName: string | null; message: string; createdAt: string }
+export interface Assessment {
+  id: string; summary: string; observations: string | null; recommendedActions: string | null;
+  followUpRequired: boolean; followUpDate: string | null; createdAt: string; agronomist?: { id: string; fullName: string };
+}
+export interface Agronomist {
+  id: string; fullName: string; email: string; phone: string | null; county: string | null; specialties: ServiceType[];
+  status: 'ACTIVE' | 'INACTIVE'; openRequests?: number; completedRequests?: number;
+}
+export interface AgronomistDashboard {
+  agronomist: Agronomist;
+  kpis: { assignedRequests: number; pendingVisits: number; completedVisits: number; followUpsDue: number };
+  followUps: (Assessment & { serviceRequest: { id: string; requestId: string; type: ServiceType; farm: { farmName: string }; farmer: { fullName: string } } })[];
+  followUpWindowDays: number;
+}
+export type AgronomistRequest = ServiceRequest & { insight: FarmInsight | null };
+
+export interface ChangeExplanation { direction: 'up' | 'down' | 'same' | 'first'; scoreDelta: number; statusChanged: boolean; summary: string; reasons: string[] }
+export interface InsightSnapshot { id: string; createdAt: string; opportunityScore: number; healthStatus: HealthStatus; statusLabel: string; recommendationCount: number; change: ChangeExplanation }
+export interface InsightHistory { farmId: string; snapshots: InsightSnapshot[]; latestChange: ChangeExplanation | null; note: string; disclaimer: string }
+
+export interface Passport {
+  publicId: string; farmName: string; county: string; country: string; primaryCrop: Crop; coffeeVarieties: string[];
+  sizeAcres: number; registeredSince: string; completedVisits: number; notice: string;
+}

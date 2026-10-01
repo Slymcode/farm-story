@@ -6,6 +6,7 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { ResponseMessage } from '../common/response';
 import { CreateServiceRequestDto, UpdateRequestStatusDto } from './dto/service-request.dto';
+import { AssignAgronomistDto } from './dto/workflow.dto';
 import { ServiceRequestService } from './service-request.service';
 
 @ApiTags('Service Requests')
@@ -34,6 +35,16 @@ export class ServiceRequestController {
   findOne(@Param('id') id: string, @CurrentUser() user?: AuthUser) { return this.requests.findOne(id, user); }
 
   @Patch(':id/status') @ResponseMessage('Request status updated')
-  @ApiOperation({ summary: 'Update request status (admin)' })
+  @ApiOperation({ summary: 'Manual status change (admin). Only IN_REVIEW and CANCELLED, along valid transitions; use /assign and the agronomist endpoints for ASSIGNED / COMPLETED.' })
+  @ApiResponse({ status: 400, description: 'Invalid transition (e.g. skipping assignment, or changing a final request)' })
   status(@Param('id') id: string, @Body() dto: UpdateRequestStatusDto) { return this.requests.updateStatus(id, dto.status); }
+
+  @Get(':id/timeline') @ResponseMessage('Request timeline loaded')
+  @ApiOperation({ summary: 'Lifecycle events for a request, oldest first (farmers can only read their own)' })
+  timeline(@Param('id') id: string, @CurrentUser() user?: AuthUser) { return this.requests.timeline(id, user); }
+
+  @Post(':id/assign') @HttpCode(200) @ResponseMessage('Agronomist assigned')
+  @ApiOperation({ summary: 'Assign (or reassign) an active agronomist (admin). Moves the request to ASSIGNED.' })
+  @ApiResponse({ status: 400, description: 'Agronomist inactive, already assigned, or request is final' })
+  assign(@Param('id') id: string, @Body() dto: AssignAgronomistDto) { return this.requests.assign(id, dto.agronomistId); }
 }

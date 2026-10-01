@@ -42,6 +42,18 @@ enum RequestStatus {
 enum UserRole {
   FARMER
 }
+enum AgronomistStatus {
+  ACTIVE
+  INACTIVE
+}
+enum RequestEventType {
+  REQUEST_CREATED
+  REQUEST_REVIEWED
+  AGRONOMIST_ASSIGNED
+  ASSESSMENT_SUBMITTED
+  REQUEST_COMPLETED
+  REQUEST_CANCELLED
+}
 enum HealthStatus {
   STRONG_POSITION
   MODERATE_OPPORTUNITY
@@ -106,11 +118,14 @@ model Farm {
   lastHarvestDate             DateTime?
   lastSoilTestDate            DateTime?
   challenges                  Challenge[]
+  /// Non-guessable id used by the public Farm Passport URL (never expose the internal id there).
+  publicId                    String      @unique @default(uuid())
   createdAt                   DateTime    @default(now())
   updatedAt                   DateTime    @updatedAt
 
-  farmer          Farmer           @relation(fields: [farmerId], references: [id], onDelete: Cascade)
+  farmer          Farmer            @relation(fields: [farmerId], references: [id], onDelete: Cascade)
   insight         FarmInsight?
+  insightHistory  FarmInsightSnapshot[]
   serviceRequests ServiceRequest[]
 
   @@index([farmerId])
@@ -118,7 +133,7 @@ model Farm {
   @@index([createdAt])
 }
 
-/// One current insight per farm (upserted on regeneration). History is intentionally not kept.
+/// One current insight per farm (upserted on regeneration). Past results are kept as FarmInsightSnapshot rows.
 model FarmInsight {
   id               String       @id @default(uuid())
   farmId           String       @unique
@@ -142,14 +157,92 @@ model ServiceRequest {
   type        ServiceType
   status      RequestStatus @default(PENDING)
   description String?
+  assignedAgronomistId String?
+  assignedAt           DateTime?
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
 
-  farmer Farmer @relation(fields: [farmerId], references: [id], onDelete: Cascade)
-  farm   Farm   @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  farmer     Farmer      @relation(fields: [farmerId], references: [id], onDelete: Cascade)
+  farm       Farm        @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  agronomist Agronomist? @relation(fields: [assignedAgronomistId], references: [id], onDelete: SetNull)
+  assessment AgronomistAssessment?
+  events     ServiceRequestEvent[]
 
   @@index([farmerId])
   @@index([farmId])
   @@index([status])
   @@index([createdAt])
+  @@index([assignedAgronomistId, status])
+}
+
+/// Field agronomist profile. Prototype: no login; admin manages, workspace uses a "viewing as" selector.
+model Agronomist {
+  id             String           @id @default(uuid())
+  fullName       String
+  email          String           @unique
+  phone          String?
+  county         String?
+  specialties    ServiceType[]
+  status         AgronomistStatus @default(ACTIVE)
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  requests    ServiceRequest[]
+  assessments AgronomistAssessment[]
+
+  @@index([status])
+}
+
+/// One field assessment per service request, written by the assigned agronomist.
+model AgronomistAssessment {
+  id                 String    @id @default(uuid())
+  serviceRequestId   String    @unique
+  agronomistId       String
+  summary            String
+  observations       String?
+  recommendedActions String?
+  followUpRequired   Boolean   @default(false)
+  followUpDate       DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  serviceRequest ServiceRequest @relation(fields: [serviceRequestId], references: [id], onDelete: Cascade)
+  agronomist     Agronomist     @relation(fields: [agronomistId], references: [id], onDelete: Restrict)
+
+  @@index([agronomistId])
+  @@index([followUpRequired, followUpDate])
+}
+
+/// Append-only audit trail of a request's lifecycle (powers the timeline).
+model ServiceRequestEvent {
+  id               String           @id @default(uuid())
+  serviceRequestId String
+  type             RequestEventType
+  fromStatus       RequestStatus?
+  toStatus         RequestStatus?
+  actorRole        String
+  actorName        String?
+  message          String
+  createdAt        DateTime         @default(now())
+
+  serviceRequest ServiceRequest @relation(fields: [serviceRequestId], references: [id], onDelete: Cascade)
+
+  @@index([serviceRequestId, createdAt])
+}
+
+/// Stored result of a deterministic insight run. Only written when the inputs/result changed.
+model FarmInsightSnapshot {
+  id               String       @id @default(uuid())
+  farmId           String
+  opportunityScore Int
+  healthStatus     HealthStatus
+  scoreBreakdown   Json?
+  recommendations  Json
+  /// Hash of the engine inputs + output, used to avoid storing identical snapshots.
+  contentHash      String
+  createdAt        DateTime     @default(now())
+
+  farm Farm @relation(fields: [farmId], references: [id], onDelete: Cascade)
+
+  @@index([farmId, createdAt])
 }

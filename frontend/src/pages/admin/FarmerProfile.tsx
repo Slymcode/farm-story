@@ -2,6 +2,7 @@ import { Link, useParams } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import { useFarmer } from '@/api/hooks';
 import { InsightCard, ServiceRequestCard } from '@/components/Insights';
+import { InsightHistory } from '@/components/InsightHistory';
 import { LazyFarmMap } from '@/components/LazyFarmMap';
 import { ScoreRing } from '@/components/ScoreRing';
 import { Card, EmptyState, ErrorState, LoadingState, SectionTitle } from '@/components/ui';
@@ -52,11 +53,12 @@ export default function FarmerProfile() {
               </div>
             ) : <EmptyState title="No insight yet" />}
           </section>
+          <section><SectionTitle hint="Stored results over time, explained from the saved data only.">Intelligence history</SectionTitle><InsightHistory farmId={farm.id} /></section>
         </>
       )}
 
       <section><SectionTitle>Service requests</SectionTitle>
-        {f.serviceRequests.length ? <ul className="space-y-2.5">{f.serviceRequests.map((r) => <ServiceRequestCard key={r.id} r={r} />)}</ul> : <EmptyState title="No service requests yet" />}</section>
+        {f.serviceRequests.length ? <ul className="space-y-2.5">{f.serviceRequests.map((r) => <ServiceRequestCard key={r.id} r={r} href={`/admin/requests/${r.id}`} />)}</ul> : <EmptyState title="No service requests yet" />}</section>
     </div>
   );
 }

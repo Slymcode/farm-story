@@ -30,15 +30,19 @@ Everything in the prototype is real end to end: React → REST API → Prisma �
 - **Ask Farm Story** AI assistant (server-side, graceful when unavailable) that can explain the Action Plan
 - **Installable, offline-ready app shell (PWA)** with an Online / Offline indicator and a locally saved onboarding draft
 - Take Action → confirmation form → request ID (`FS-REQ-000021`) and status
+- **Request timeline** and shared agronomist assessment for each request, **Farm Intelligence History** (score chart and data-only change explanations) and a public, privacy-safe **Farm Passport** with QR code
 
 **Administrator**
 - KPI cards: farmers, total acres, estimated coffee production, service requests
 - Farmers by location (bar list + map of farm markers)
 - Searchable / filterable / paginated farmer table → farmer profile (farmer, farm, map, intelligence, requests)
 - Service request list with status filter and status updates
+- **Agronomists** management, assignment from a request detail page (with timeline), and an "Assigned to" column
 - **Export CSV** of farmers and of service requests (real database data, respecting the current filters)
 
-**Prototype Demo Access** (Farmer / Admin switcher) is clearly labelled as **not production authentication**. Admin and Agronomist sign-in are intentionally not implemented.
+**Agronomist Workspace** (`/agronomist`): KPI cards, assigned requests, request detail with farm context, assessment form, completion and timeline. See [Agronomist Workflow](#agronomist-workflow).
+
+**Prototype Demo Access** (Farmer / Agronomist / Admin switcher) is clearly labelled as **not production authentication**. Admin and Agronomist sign-in are intentionally not implemented.
 
 ## Screenshots
 
@@ -112,6 +116,10 @@ erDiagram
     FARM ||--o| FARM_INSIGHT : has
     FARMER ||--o{ SERVICE_REQUEST : creates
     FARM ||--o{ SERVICE_REQUEST : receives
+    FARM ||--o{ FARM_INSIGHT_SNAPSHOT : "history"
+    AGRONOMIST ||--o{ SERVICE_REQUEST : "assigned to"
+    SERVICE_REQUEST ||--o| AGRONOMIST_ASSESSMENT : has
+    SERVICE_REQUEST ||--o{ SERVICE_REQUEST_EVENT : timeline
 
     USER {
         uuid id PK
@@ -257,12 +265,21 @@ Swagger UI: `http://localhost:4000/api/docs`
 | POST | `/api/farms` | Register farm (insight generated automatically) |
 | GET / PATCH | `/api/farms/:id` | Get / update (update regenerates insight) |
 | GET | `/api/farms/:id/insight` | Current insight |
+| GET | `/api/farms/:id/insight/history` | Stored snapshots + data-only explanation of each change |
 | POST | `/api/farms/:id/insight/generate` | Regenerate (upsert) |
 | POST | `/api/service-requests` | Create request (`FS-REQ-…`, status PENDING) |
 | GET | `/api/service-requests` | List: `status`, `farmerId`, `outstanding` |
 | GET | `/api/service-requests/export` | CSV download (`status` or `outstanding` filter) |
 | GET | `/api/service-requests/:id` | Get one |
-| PATCH | `/api/service-requests/:id/status` | Update status |
+| PATCH | `/api/service-requests/:id/status` | Manual status change (admin): only `IN_REVIEW` / `CANCELLED`, along valid transitions |
+| POST | `/api/service-requests/:id/assign` | Assign / reassign an active agronomist (admin) |
+| GET | `/api/service-requests/:id/timeline` | Lifecycle events (farmers: own requests only) |
+| GET / POST / PATCH | `/api/agronomists` `/:id` | List / add / update (incl. ACTIVE / INACTIVE) agronomists (admin) |
+| GET | `/api/agronomists/:id/dashboard` | Workspace KPIs from real data |
+| GET | `/api/agronomists/:id/requests` `/:requestId` | Assigned requests / one request (403 if not theirs) |
+| POST | `/api/agronomists/:id/requests/:requestId/assessment` `/complete` | Submit assessment / complete request |
+| GET | `/api/passport/:publicId` | Public Farm Passport (allow-listed fields only) |
+| POST | `/api/farms/:id/passport/reset` | New public id; old link / QR stop working (owner) |
 | POST | `/api/ai/farm-question` | Ask the assistant |
 | GET | `/api/dashboard/summary` `/locations` `/recent-farmers` `/service-requests` | Admin data |
 
@@ -328,6 +345,49 @@ Open the app and click **Try Demo Farmer Journey** (no sign-in), **Log in** with
 
 Frontend: any static host (`npm run build` → `dist/`) with `VITE_API_URL` set. Backend: any Node host or container with `DATABASE_URL`, `FRONTEND_URL`, `AI_API_KEY`, `AI_MODEL`; run `prisma migrate deploy` on release. Set a long random `JWT_SECRET` (and `COOKIE_SAME_SITE=none` only if the frontend and API are on different sites). Use a managed PostgreSQL. Replace the demo role switcher with real admin authentication before any real use.
 
+## Agronomist Workflow
+
+```text
+PENDING ──► IN_REVIEW ──► ASSIGNED ──► COMPLETED        (any open state ──► CANCELLED)
+```
+
+1. A farmer submits a request (`REQUEST_CREATED` event).
+2. An admin opens the request (`/admin/requests/:id`) and **assigns an active agronomist**. Assigning a `PENDING` request records both a review and the assignment. Reassigning is allowed until an assessment exists. Inactive agronomists keep existing work but cannot be chosen.
+3. The agronomist opens `/agronomist` (KPI cards: **Assigned Requests, Pending Visits, Completed Visits, Follow-ups Due**, all counted from real rows) and the request detail page, which shows the farmer, farm, map, current insight and action plan.
+4. They **submit an assessment** (summary, observations, suggested actions, optional follow-up date, which cannot be in the past). It is editable until completion.
+5. They **complete** the request. Completion needs an assessment.
+
+**State-machine safety** (`service-request/request-workflow.ts`, unit tested): the generic status endpoint can only set `IN_REVIEW` or `CANCELLED`; `ASSIGNED` and `COMPLETED` are reachable only through assign / complete. `COMPLETED` and `CANCELLED` are final. An agronomist can only act on requests assigned to them (403 otherwise). Status changes use a compare-and-set update, so two people acting at once cannot both succeed (409 with a clear message). The UI only offers transitions the API accepts.
+
+**Timeline.** Every transition writes an append-only `ServiceRequestEvent` (type, from/to status, actor role/name, message, time). Farmers see their own request's timeline and shared assessment in a dialog; admins and agronomists see it on their detail pages.
+
+**Follow-ups due** = assessments with a follow-up required whose date is overdue or within the next 7 days.
+
+**Prototype access.** The agronomist workspace has no login. A "Viewing as" selector chooses the agronomist; it sits under the *Prototype Demo Access — not production authentication* label.
+
+## Farm Intelligence History
+
+Each time the deterministic engine runs (farm created, farm updated, regenerated) a `FarmInsightSnapshot` is stored **only if the result changed** (content hash of score, status, dimension points, recommended services and available information), so repeated refreshes do not create duplicates. The current insight stays one row per farm; history lives in snapshots.
+
+`GET /api/farms/:id/insight/history` returns snapshots (oldest first, last 50) and, for each, an explanation built by the pure function `explainChange`: which score dimensions moved, which information was added or removed, which suggested services appeared or disappeared. **Nothing in the explanation comes from AI or from guesses about the farm.** Wording is deliberately careful: a lower score means *fewer gaps were identified in the information recorded*, not that results improved; a higher one does not mean the farm is doing worse.
+
+The chart is a small dependency-free SVG with a text list of the same data beneath it. Snapshots exist only from the point this feature was installed; the seed builds a real history for John Mwangi by running the engine on earlier versions of his farm data.
+
+## AI Architecture
+
+The AI is an explanation layer only. The deterministic `FarmInsightEngine` produces the score, status and recommendations; the AI receives a minimal, read-only context (no phone, email or surname) and returns text. It cannot change a score, status, recommendation, request status, assessment or any database record: the AI module has no write path to any table, and the Action Plan, history, timeline and agronomist data are all produced without it. If the AI is unavailable, every other feature keeps working.
+
+## Farm Passport
+
+A public, login-free page at `/passport/:publicId` with a QR code, intended for buyers or partners. `publicId` is a random UUID separate from the internal id.
+
+- **Shown:** farm name, county and country, main crop, coffee varieties, farm size, date joined, count of completed visits, and a notice that it is not a certification or credit assessment.
+- **Never shown:** farmer name, phone, email, Farmer ID, exact coordinates or place text, challenges, opportunity score, recommendations, assessments, requests or AI conversations.
+- The API builds the response from an explicit allow-list (`toPublicPassport`), and a unit test asserts that private values cannot appear.
+- A farmer can **stop sharing** by creating a new link; the old link and QR code then return 404.
+- The QR code is generated in the browser; nothing is sent to a third party.
+- Limits: anyone who has the link can view it; there is no per-viewer access control, expiry or view analytics.
+
 ## Scalability
 
 **Evolution path (no premature microservices).**
@@ -366,6 +426,16 @@ Cache reusable recommendations, process expensive work asynchronously, and never
 - usage monitoring: tokens, cost, latency and error rates per user, with alerts;
 - cost controls such as spend caps, input/output token limits and a kill switch;
 - potentially asynchronous AI processing (queue + worker) for expensive or bulk workflows.
+
+**At 100,000 farmers and 500 agronomists** (summary of the points above, applied to the new features):
+- Request lists, the agronomist workspace and history are already index-backed (`ServiceRequest(assignedAgronomistId, status)`, `ServiceRequestEvent(serviceRequestId, createdAt)`, `FarmInsightSnapshot(farmId, createdAt)`). Move lists to cursor pagination.
+- Dashboard KPIs are `count` queries today; at scale cache or materialise them on a schedule. Redis only where it is justified (hot aggregates, rate limiting), not by default.
+- Read replicas for admin/analytics queries; partition `ServiceRequestEvent` and `FarmInsightSnapshot` by time once they reach hundreds of millions of rows.
+- Assignment suggestions (by county, specialty and load) and notifications belong on a queue with workers, not in the request path.
+- Audit logs: the timeline already records who did what for requests; a general append-only audit log (and real admin/agronomist roles) would be added for every privileged action.
+- Large maps: viewport / bounding-box queries, clustering and vector tiles as described above.
+- AI: authenticated access, per-user quotas and rate limits, spend caps and token limits, usage monitoring, and queueing for bulk work.
+- Microservices only where load or team boundaries justify it (weather/satellite ingestion, notifications, AI); the monolith's module boundaries (agronomist, insight, passport) are the extraction seams.
 
 **Payments (future, out of scope).** Separate payment service, provider integration, webhook processing, transaction records, idempotency keys, reconciliation and audit logs.
 
@@ -411,7 +481,10 @@ Admins get an **Export CSV** button on the **Farmers** and **Service requests** 
 - The admin map returns all farm markers in one response; viewport queries, clustering and pagination would be needed beyond demo-scale data.
 - No real payments and no buyer marketplace.
 - Map tiles depend on OpenStreetMap availability (the form still works with typed coordinates).
-- One insight per farm (no history); no audit log.
+- Insight history starts when the feature was installed (earlier results were never stored); there is no general audit log beyond the request timeline.
+- The agronomist workspace and admin screens have no real authentication: the "Viewing as" selector is Prototype Demo Access, so anyone can view as any agronomist. Assignment is manual (no workload or specialty matching), and there are no notifications to farmers or agronomists.
+- The Farm Passport is a plain public link: no expiry, per-viewer control or analytics, and the farmer-only "stop sharing" action is enforced only for logged-in farmers.
+- The new agronomist, timeline, history and passport features have unit tests and a scripted browser check, not a full integration suite.
 - Offline support is limited to the app shell and a local onboarding draft; offline submissions, sync and conflict resolution are not implemented. A service worker only takes effect on production builds served over HTTPS (or localhost).
 - CSV export endpoints are not access-controlled (admin authentication is out of scope) and are capped at 10,000 rows.
 - The Action Plan explanation path was verified with a mocked AI provider only; it has not been exercised against a live model.

@@ -26,7 +26,7 @@ export default function FarmerLayout() {
   return (
     <div className="flex min-h-dvh flex-col">
       <header className="sticky top-0 z-30 border-b border-cream-200 bg-cream-50/95 backdrop-blur">
-        <div className="mx-auto flex max-w-5xl items-center justify-between gap-3 px-4 py-2.5">
+        <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-x-3 gap-y-2 px-4 py-2.5">
           <Link to={user ? '/farmer' : '/'} aria-label="Farm Story home"><Logo /></Link>
           <div className="flex flex-wrap items-center justify-end gap-2">
             <ConnectionStatus />

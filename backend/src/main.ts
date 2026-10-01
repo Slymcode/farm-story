@@ -21,7 +21,7 @@ async function bootstrap() {
     .setDescription('Farmer onboarding, farm intelligence, service requests, admin dashboard and AI assistant. ' +
       'All responses use the envelope { success, message, data } (errors: { success:false, message, error }).')
     .setVersion('1.0')
-    .addCookieAuth('farmstory_token').addTag('Auth').addTag('Farmers').addTag('Farms').addTag('Insights').addTag('Service Requests').addTag('AI').addTag('Dashboard')
+    .addCookieAuth('farmstory_token').addTag('Auth').addTag('Farmers').addTag('Farms').addTag('Insights').addTag('Service Requests').addTag('Agronomists').addTag('Farm Passport').addTag('AI').addTag('Dashboard')
     .build();
   SwaggerModule.setup('api/docs', app, SwaggerModule.createDocument(app, doc));
 

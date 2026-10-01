@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
-import { ClipboardList, LayoutDashboard, Menu, Users, X } from 'lucide-react';
+import { ClipboardList, LayoutDashboard, Menu, Stethoscope, Users, X } from 'lucide-react';
 import { ConnectionStatus } from '@/components/ConnectionStatus';
 import { DemoAccess } from '@/components/DemoAccess';
 import { Logo, cx } from '@/components/ui';
@@ -9,6 +9,7 @@ const NAV = [
   { to: '/admin', label: 'Overview', icon: LayoutDashboard, end: true },
   { to: '/admin/farmers', label: 'Farmers', icon: Users },
   { to: '/admin/requests', label: 'Service requests', icon: ClipboardList },
+  { to: '/admin/agronomists', label: 'Agronomists', icon: Stethoscope },
 ];
 
 function Nav({ onNavigate }: { onNavigate?: () => void }) {
@@ -33,7 +34,7 @@ export default function AdminLayout() {
         <p className="mt-auto text-xs text-forest-200/80">Administrator Dashboard<br />Prototype Demo Access — not production authentication.</p>
       </aside>
       <div className="min-w-0">
-        <header className="sticky top-0 z-30 flex items-center justify-between gap-3 border-b border-cream-200 bg-cream-50/95 px-4 py-2.5 backdrop-blur">
+        <header className="sticky top-0 z-30 flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b border-cream-200 bg-cream-50/95 px-4 py-2.5 backdrop-blur">
           <div className="flex items-center gap-3">
             <button className="grid size-11 place-items-center rounded-xl hover:bg-cream-200 lg:hidden" aria-label="Open navigation" aria-expanded={open} onClick={() => setOpen(true)}><Menu className="size-6" /></button>
             <div className="lg:hidden"><Logo /></div>

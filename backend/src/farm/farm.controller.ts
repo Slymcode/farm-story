@@ -36,6 +36,10 @@ export class InsightController {
   @ApiOperation({ summary: 'Get the current deterministic Farm Insight (score, insights, recommendations, breakdown)' })
   get(@Param('id') id: string, @CurrentUser() user?: AuthUser) { return this.insights.getForFarm(id, user); }
 
+  @Get('history') @ResponseMessage('Farm insight history loaded')
+  @ApiOperation({ summary: 'Stored insight snapshots over time with a data-only explanation of each change (no AI involved)' })
+  history(@Param('id') id: string, @CurrentUser() user?: AuthUser) { return this.insights.history(id, user); }
+
   @Post('generate') @HttpCode(200) @ResponseMessage('Farm insight regenerated')
   @ApiOperation({ summary: 'Regenerate the insight (upserts — one current insight per farm)' })
   generate(@Param('id') id: string, @CurrentUser() user?: AuthUser) { return this.insights.generateForFarm(id, user); }

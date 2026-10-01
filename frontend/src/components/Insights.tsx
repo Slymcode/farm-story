@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom';
 import { BarChart3, CircleAlert, Flag, Info, type LucideIcon } from 'lucide-react';
 import { Button, Card, StatusBadge } from './ui';
 import { SERVICES } from '@/lib/constants';
@@ -36,7 +37,7 @@ export function RecommendationCard({ rec, onAct }: { rec: Recommendation; onAct:
   );
 }
 
-export function ServiceRequestCard({ r, showFarmer }: { r: ServiceRequest; showFarmer?: boolean }) {
+export function ServiceRequestCard({ r, showFarmer, onOpen, href }: { r: ServiceRequest; showFarmer?: boolean; onOpen?: (id: string) => void; href?: string }) {
   const s = SERVICES[r.type];
   return (
     <li className="flex items-start gap-3 rounded-xl border border-cream-200 bg-white p-3.5">
@@ -46,7 +47,11 @@ export function ServiceRequestCard({ r, showFarmer }: { r: ServiceRequest; showF
         <p className="text-sm text-ink-500">{r.requestId} · {date(r.createdAt)}{showFarmer && r.farmer ? ` · ${r.farmer.fullName}` : ''}</p>
         {r.description && <p className="mt-1 text-sm text-ink-700">“{r.description}”</p>}
       </div>
-      <StatusBadge status={r.status} />
+      <div className="flex flex-col items-end gap-2">
+        <StatusBadge status={r.status} />
+        {href && <Link to={href} className="text-sm font-semibold text-forest-700 underline underline-offset-2">Open request</Link>}
+        {onOpen && <button onClick={() => onOpen(r.id)} className="text-sm font-semibold text-forest-700 underline underline-offset-2" aria-label={`View details and timeline for ${r.requestId}`}>View timeline</button>}
+      </div>
     </li>
   );
 }

@@ -6,6 +6,9 @@ import { useAuth } from '@/auth/AuthContext';
 import { ActionPlan } from '@/components/ActionPlan';
 import { AskFarmStory } from '@/components/AskFarmStory';
 import { InsightCard, ServiceRequestCard } from '@/components/Insights';
+import { InsightHistory } from '@/components/InsightHistory';
+import { PassportPanel } from '@/components/PassportPanel';
+import { RequestDetailDialog } from '@/components/RequestDetailDialog';
 import { LazyFarmMap } from '@/components/LazyFarmMap';
 import { RequestDialog } from '@/components/RequestDialog';
 import { ScoreDialog } from '@/components/ScoreDialog';
@@ -31,6 +34,7 @@ export default function FarmIntelligence({ section }: { section?: keyof typeof S
   const requests = useFarmerRequests(farm.data?.farmerId);
   const [scoreOpen, setScoreOpen] = useState(false);
   const [requestType, setRequestType] = useState<ServiceType | null>(null);
+  const [openRequestId, setOpenRequestId] = useState<string | null>(null);
   const [welcome, setWelcome] = useState(!!state?.welcome);
   useEffect(() => {
     if (section && farm.data) document.getElementById(SECTION_ID[section])?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -120,17 +124,26 @@ export default function FarmIntelligence({ section }: { section?: keyof typeof S
             <SectionTitle>Challenges you reported</SectionTitle>
             {f.challenges.length ? <ul className="flex flex-wrap gap-2">{f.challenges.map((c) => <li key={c} className="rounded-full bg-earth-100 px-3.5 py-1.5 text-sm font-semibold text-earth-800">{challengeLabel(c)}</li>)}</ul> : <p className="text-ink-500">None reported.</p>}
           </section>
+          <section id="history" className="scroll-mt-24">
+            <SectionTitle hint="Saved each time your farm information changes the result.">Farm Intelligence History</SectionTitle>
+            <InsightHistory farmId={f.id} />
+          </section>
+          <section id="passport" className="scroll-mt-24">
+            <SectionTitle hint="A safe, shareable profile of your farm.">Farm Passport</SectionTitle>
+            <PassportPanel farm={f} />
+          </section>
           <div id="ask-farm-story" className="scroll-mt-24"><AskFarmStory farmId={f.id} /></div>
           <section id="my-requests" className="scroll-mt-24">
             <SectionTitle>Your requests</SectionTitle>
             {requests.isLoading ? <LoadingState rows={2} /> : requests.isError ? <ErrorState message="We couldn't load your requests." onRetry={() => requests.refetch()} />
-              : requests.data?.items.length ? <ul className="space-y-2.5">{requests.data.items.map((r) => <ServiceRequestCard key={r.id} r={r} />)}</ul>
+              : requests.data?.items.length ? <ul className="space-y-2.5">{requests.data.items.map((r) => <ServiceRequestCard key={r.id} r={r} onOpen={setOpenRequestId} />)}</ul>
               : <EmptyState title="No service requests yet" body="When you request a service, you can follow its status here." />}
           </section>
         </div>
       </div>
 
       {insight && <ScoreDialog open={scoreOpen} onClose={() => setScoreOpen(false)} insight={insight} />}
+      <RequestDetailDialog requestId={openRequestId} onClose={() => setOpenRequestId(null)} />
       <RequestDialog type={requestType} farm={f} onClose={() => setRequestType(null)} />
       {!user && <p className="text-center text-sm"><Link to="/register" className="font-medium text-forest-700 underline underline-offset-2">Register another farm</Link></p>}
     </div>
