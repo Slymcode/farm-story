@@ -1,6 +1,8 @@
 import { Body, Controller, Get, HttpCode, Param, Post, Query, Res } from '@nestjs/common';
 import type { Response } from 'express';
 import { sendCsv } from '../common/csv';
+import { AuthUser } from '../auth/auth.types';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { ResponseMessage } from '../common/response';
 import { CreateFarmerDto } from './dto/create-farmer.dto';
@@ -15,7 +17,7 @@ export class FarmerController {
   @ApiOperation({ summary: 'Register a farmer and generate their Farm Story ID (FS-KEN-000001)' })
   @ApiResponse({ status: 201, description: 'Farmer created' })
   @ApiResponse({ status: 400, description: 'VALIDATION_ERROR — friendly per-field messages in `details`' })
-  create(@Body() dto: CreateFarmerDto) { return this.farmers.create(dto); }
+  create(@Body() dto: CreateFarmerDto, @CurrentUser() user?: AuthUser) { return this.farmers.create(dto, user); }
 
   @Get() @ResponseMessage('Farmers loaded')
   @ApiOperation({ summary: 'List farmers (admin) with search, county/crop filters and pagination' })
@@ -31,6 +33,6 @@ export class FarmerController {
 
   @Get(':id') @ResponseMessage('Farmer loaded')
   @ApiOperation({ summary: 'Get a farmer with farms, insight and service requests (UUID or FS-KEN-… ID)' })
-  @ApiResponse({ status: 404, description: 'NOT_FOUND' })
-  findOne(@Param('id') id: string) { return this.farmers.findOne(id); }
+  @ApiResponse({ status: 403, description: 'A logged-in farmer asked for someone else\'s record' }) @ApiResponse({ status: 404, description: 'NOT_FOUND' })
+  findOne(@Param('id') id: string, @CurrentUser() user?: AuthUser) { return this.farmers.findOne(id, user); }
 }

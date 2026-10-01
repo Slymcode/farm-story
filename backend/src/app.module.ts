@@ -7,8 +7,9 @@ import { InsightModule } from './insight/insight.module';
 import { ServiceRequestModule } from './service-request/service-request.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { AiModule } from './ai/ai.module';
+import { AuthModule } from './auth/auth.module';
 
 @Module({
-  imports: [ConfigModule.forRoot({ isGlobal: true }), PrismaModule, FarmerModule, FarmModule, InsightModule, ServiceRequestModule, DashboardModule, AiModule],
+  imports: [ConfigModule.forRoot({ isGlobal: true }), PrismaModule, AuthModule, FarmerModule, FarmModule, InsightModule, ServiceRequestModule, DashboardModule, AiModule],
 })
 export class AppModule {}

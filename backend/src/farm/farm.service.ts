@@ -1,7 +1,10 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { InsightService } from '../insight/insight.service';
 import { presentInsight } from '../insight/farm-insight.engine';
+import { AuthUser } from '../auth/auth.types';
+import { NOT_YOURS, ownFarmerId } from '../auth/ownership';
+import { publicFarmer } from '../farmer/farmer.service';
 import { CreateFarmDto, UpdateFarmDto } from './dto/farm.dto';
 
 const toDate = (v?: string) => (v ? new Date(v) : undefined);
@@ -34,7 +37,13 @@ export function buildFarmUpdateData(existing: { primaryCrop: string }, dto: Upda
 export class FarmService {
   constructor(private readonly prisma: PrismaService, private readonly insights: InsightService) {}
 
-  async create(dto: CreateFarmDto) {
+  async create(dto: CreateFarmDto, actor?: AuthUser) {
+    // A logged-in farmer always registers a farm for THEIR OWN farmer record; a farmerId sent by the browser is not trusted.
+    if (actor) {
+      const own = await ownFarmerId(this.prisma, actor);
+      if (!own) throw new BadRequestException('Please save your farmer details first.');
+      dto.farmerId = own;
+    }
     const farmer = await this.prisma.farmer.findFirst({ where: { OR: [{ id: dto.farmerId }, { farmerId: dto.farmerId }] } });
     if (!farmer) throw new NotFoundException('We could not find this farmer. Please register first.');
     const isCoffee = dto.primaryCrop === 'COFFEE';
@@ -49,20 +58,22 @@ export class FarmService {
         challenges: Array.from(new Set(dto.challenges)),
       },
     });
+    if (actor) await this.prisma.user.update({ where: { id: actor.id }, data: { onboardingCompleted: true } }); // onboarding is done once the farm exists
     await this.insights.generateForFarm(farm.id); // Insight is created as part of farm registration.
-    return this.findOne(farm.id);
+    return this.findOne(farm.id, actor);
   }
 
-  async findOne(id: string) {
+  async findOne(id: string, actor?: AuthUser) {
     const farm = await this.prisma.farm.findUnique({ where: { id }, include: { farmer: true, insight: true } });
     if (!farm) throw new NotFoundException('We could not find this farm.');
-    return { ...farm, insight: presentInsight(farm.insight) };
+    if (actor && farm.farmer.userId !== actor.id) throw new ForbiddenException(NOT_YOURS);
+    return { ...farm, farmer: publicFarmer(farm.farmer), insight: presentInsight(farm.insight) };
   }
 
-  async update(id: string, dto: UpdateFarmDto) {
-    const existing = await this.findOne(id);
+  async update(id: string, dto: UpdateFarmDto, actor?: AuthUser) {
+    const existing = await this.findOne(id, actor);
     await this.prisma.farm.update({ where: { id }, data: buildFarmUpdateData(existing, dto) });
     await this.insights.generateForFarm(id); // inputs changed → refresh the single current insight
-    return this.findOne(id);
+    return this.findOne(id, actor);
   }
 }

@@ -5,6 +5,7 @@
  */
 import 'dotenv/config';
 import { PrismaClient, Prisma } from '@prisma/client';
+import * as bcrypt from 'bcryptjs';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { FarmInsightEngine } from '../src/insight/farm-insight.engine';
 
@@ -17,6 +18,10 @@ type Seed = {
   farm: { name: string; location: string; lat: number; lng: number; acres: number; crop: any; varieties?: string[]; trees?: number; kg?: number; harvest?: string; soil?: string; challenges: any[] };
   requests?: { type: any; status: any; note?: string; created: string }[];
 };
+
+/** Demo login accounts (fictional, password is public on purpose). They let reviewers try login and farmer ownership. */
+const DEMO_PASSWORD = 'Password123!';
+const DEMO_ACCOUNTS: Record<string, string> = { 'John Mwangi': 'john@example.com', 'Grace Wanjiru': 'grace.wanjiru@example.com' };
 
 const seeds: Seed[] = [
   { name: 'John Mwangi', phone: '0712345678', county: 'Nyeri', region: 'Mathira', lang: 'English', created: '2026-09-01',
@@ -57,12 +62,15 @@ async function main() {
   await prisma.farmInsight.deleteMany();
   await prisma.farm.deleteMany();
   await prisma.farmer.deleteMany();
+  await prisma.user.deleteMany();
   await prisma.counter.deleteMany();
 
   let farmerN = 0, requestN = 0;
   for (const s of seeds) {
+    const demoEmail = DEMO_ACCOUNTS[s.name];
+    const user = demoEmail ? await prisma.user.create({ data: { name: s.name, email: demoEmail, passwordHash: await bcrypt.hash(DEMO_PASSWORD, 10), role: 'FARMER', onboardingCompleted: true } }) : null;
     const farmer = await prisma.farmer.create({
-      data: { farmerId: `FS-KEN-${pad(++farmerN)}`, fullName: s.name, mobileNumber: s.phone, email: s.email ?? null, county: s.county, region: s.region ?? null, preferredLanguage: s.lang, createdAt: new Date(s.created) },
+      data: { userId: user?.id ?? null, farmerId: `FS-KEN-${pad(++farmerN)}`, fullName: s.name, mobileNumber: s.phone, email: s.email ?? null, county: s.county, region: s.region ?? null, preferredLanguage: s.lang, createdAt: new Date(s.created) },
     });
     const f = s.farm;
     const farm = await prisma.farm.create({
@@ -89,6 +97,6 @@ async function main() {
   }
   // Keep the ID counters ahead of seeded IDs so new registrations continue the sequence.
   await prisma.counter.createMany({ data: [{ name: 'farmer', value: farmerN }, { name: 'service_request', value: requestN }] });
-  console.log(`Seeded ${farmerN} farmers and ${requestN} service requests. John Mwangi is FS-KEN-000001.`);
+  console.log(`Seeded ${farmerN} farmers and ${requestN} service requests. John Mwangi is FS-KEN-000001.\nDemo logins (password: ${DEMO_PASSWORD}): ${Object.values(DEMO_ACCOUNTS).join(', ')}`);
 }
 main().catch((e) => { console.error(e); process.exit(1); }).finally(() => prisma.$disconnect());

@@ -42,11 +42,12 @@ export default function Welcome() {
           <h1 className="max-w-xl text-4xl font-extrabold leading-[1.1] !text-cream-50 sm:text-5xl">Your farm has a story.</h1>
           <p className="mt-4 max-w-lg text-lg text-forest-100 sm:text-xl">Let's turn its data into better decisions.</p>
           <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-            <Link to="/register" className="inline-flex min-h-14 items-center justify-center gap-2 rounded-xl bg-gold-400 px-6 text-lg font-bold text-forest-950 transition-colors hover:bg-gold-500">Start Farm Registration <ArrowRight className="size-5" aria-hidden /></Link>
+            <Link to="/signup" className="inline-flex min-h-14 items-center justify-center gap-2 rounded-xl bg-gold-400 px-6 text-lg font-bold text-forest-950 transition-colors hover:bg-gold-500">Start Farm Registration <ArrowRight className="size-5" aria-hidden /></Link>
             <Button variant="secondary" icon={Play} loading={busy} onClick={tryDemo} className="min-h-14 border-forest-700 bg-forest-800 px-6 text-lg text-cream-50 hover:bg-forest-700">Try Demo Farmer Journey</Button>
           </div>
           {error && <p role="alert" className="mt-4 rounded-xl bg-danger-100 p-3 text-sm font-medium text-danger-700">{error}</p>}
-          <p className="mt-4 text-sm text-forest-200">Prototype Demo Access — the demo opens the sample farmer, John Mwangi, without signing in.</p>
+          <p className="mt-5 text-forest-100">Already have an account? <Link to="/login" className="font-semibold text-gold-400 underline underline-offset-2">Log in</Link></p>
+          <p className="mt-2 text-sm text-forest-200">Prototype Demo Access — the demo opens the sample farmer, John Mwangi, without signing in.</p>
         </div>
       </section>
 

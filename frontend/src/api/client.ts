@@ -9,6 +9,7 @@ export async function api<T>(path: string, init?: RequestInit & { json?: unknown
   let res: Response;
   try {
     res = await fetch(`${BASE}${path}`, {
+      credentials: 'include', // the login session is an HTTP-only cookie
       ...init,
       headers: { ...(init?.json !== undefined ? { 'Content-Type': 'application/json' } : {}), ...init?.headers },
       body: init?.json !== undefined ? JSON.stringify(init.json) : init?.body,
@@ -27,7 +28,7 @@ export async function api<T>(path: string, init?: RequestInit & { json?: unknown
 /** Downloads a CSV produced by the server (real database state) through the browser's normal download flow. */
 export async function downloadCsv(path: string, filename: string): Promise<void> {
   let res: Response;
-  try { res = await fetch(`${BASE}${path}`, { headers: { Accept: 'text/csv' } }); }
+  try { res = await fetch(`${BASE}${path}`, { credentials: 'include', headers: { Accept: 'text/csv' } }); }
   catch { throw new ApiError('We could not reach Farm Story. Please check your connection and try again.', 'NETWORK_ERROR', 0); }
   if (!res.ok) throw new ApiError('The export could not be created. Please try again.', 'EXPORT_ERROR', res.status);
   const url = URL.createObjectURL(await res.blob());

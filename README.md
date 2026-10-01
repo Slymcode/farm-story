@@ -19,7 +19,8 @@ Everything in the prototype is real end to end: React → REST API → Prisma �
 ## Features
 
 **Farmer**
-- Welcome screen with **Start Farm Registration** and **Try Demo Farmer Journey** (opens seeded John Mwangi)
+- Welcome screen with **Start Farm Registration** (create an account, then onboarding), **Log in**, and **Try Demo Farmer Journey** (opens seeded John Mwangi without signing in)
+- **Farmer accounts:** sign up, log in / out, continue unfinished onboarding later, a lightweight **My Farm** dashboard and a farmer navigation bar (see [Authentication](#authentication))
 - 5-step wizard (Farmer, Farm, Location, Challenges, Review) with per-step Zod validation, Back/Continue, and a draft saved in the browser so a refresh never loses answers
 - Human-readable Farmer ID (`FS-KEN-000001`) shown after registration
 - Coffee-only fields (varieties, tree count) appear only when Coffee is chosen
@@ -37,7 +38,7 @@ Everything in the prototype is real end to end: React → REST API → Prisma �
 - Service request list with status filter and status updates
 - **Export CSV** of farmers and of service requests (real database data, respecting the current filters)
 
-**Prototype Demo Access** (Farmer / Admin switcher) is clearly labelled as **not production authentication**.
+**Prototype Demo Access** (Farmer / Admin switcher) is clearly labelled as **not production authentication**. Admin and Agronomist sign-in are intentionally not implemented.
 
 ## Screenshots
 
@@ -58,6 +59,7 @@ Everything in the prototype is real end to end: React → REST API → Prisma �
 
 ```text
 React (Vite) ──REST──> NestJS ──Prisma──> PostgreSQL
+                          ├── AuthModule (bcrypt + JWT in HTTP-only cookie; farmer ownership checks)
                           ├── FarmInsightEngine  (deterministic rules → score, insights, recommendations)
                           │      └── Action Plan (derived view of the recommendations; no new rules)
                           ├── AiService ──> AiProvider (explains the score + Action Plan; optional, server-side only)
@@ -105,13 +107,23 @@ farm-story/
 
 ```mermaid
 erDiagram
+    USER |o--o| FARMER : "logs in as"
     FARMER ||--o{ FARM : owns
     FARM ||--o| FARM_INSIGHT : has
     FARMER ||--o{ SERVICE_REQUEST : creates
     FARM ||--o{ SERVICE_REQUEST : receives
 
+    USER {
+        uuid id PK
+        string name
+        string email UK
+        string passwordHash "bcrypt"
+        enum role "FARMER"
+        boolean onboardingCompleted
+    }
     FARMER {
         uuid id PK
+        uuid userId FK "nullable, unique"
         string farmerId UK "FS-KEN-000001"
         string fullName
         string mobileNumber
@@ -160,7 +172,37 @@ Indexes: `Farmer(county, createdAt)`, `Farm(farmerId, primaryCrop, createdAt)`, 
 
 ## Farmer Journey
 
-Welcome → **1 Farmer** → **2 Farm** → **3 Location** → **4 Challenges** → **5 Review** (nothing is saved until the farmer confirms) → Farm Intelligence → Take Action → optional AI assistant. "Insights" is deliberately *not* a data-entry step.
+Welcome → **Create account** → **1 Farmer** → **2 Farm** → **3 Location** → **4 Challenges** → **5 Review** (nothing is saved until the farmer confirms) → Farm Intelligence → Take Action → optional AI assistant. "Insights" is deliberately *not* a data-entry step.
+
+## Authentication
+
+**What exists.** Farmers can **sign up, log in, log out and come back later**. After sign-up they go straight into the existing onboarding flow (no second onboarding system). If they stop part-way, `User.onboardingCompleted` stays `false`, the next login opens **Continue Onboarding** (their answers are saved on the device, per account), and the dashboard stays locked until the farm is saved. Once the farm exists, `onboardingCompleted` becomes `true` and login goes to the **My Farm** dashboard.
+
+| State | Where the farmer lands |
+|---|---|
+| Logged out | `/login` (or `/signup`) |
+| Logged in, onboarding not finished | `/farmer/onboarding` |
+| Logged in, onboarding finished | `/farmer/dashboard` |
+
+Farmer routes: `/farmer/onboarding`, `/farmer/dashboard`, `/farmer/intelligence`, `/farmer/actions`, `/farmer/ask`, `/farmer/requests`.
+
+**How it works.**
+- **Passwords** are hashed with **bcrypt** (`bcryptjs`) and never returned or logged; there is one account per unique email, and credentials live only on `User` (never on `Farmer`).
+- **JWT** (`@nestjs/jwt` + Passport) carried in an **HTTP-only, `SameSite=Lax` cookie** (`Secure` in production). The browser's JavaScript cannot read it. Tokens last 7 days; there are no refresh tokens.
+- Login errors are generic (`Invalid email or password.`) for both an unknown email and a wrong password.
+- **Data model:** `User { id, name, email (unique), passwordHash, role (FARMER), onboardingCompleted }` with an optional one-to-one `Farmer.userId`. Seeded demo farmers have no user. Migration: `prisma/migrations/20261001000000_add_user_auth`.
+
+**Farmer ownership.** The server decides who a request belongs to, not the browser. When a farmer is logged in:
+- saving farmer details links the record to **their** account (resuming onboarding updates the same record, never creates a second one);
+- creating a farm or a service request uses **their** farmer, whatever `farmerId` the browser sends;
+- reading or updating a farmer, farm, insight, service request or AI answer that belongs to someone else returns **403**, and their request list is always scoped to their own requests;
+- the internal `userId` is never included in API responses.
+
+**Demo logins** (created by `npm run seed`, password `Password123!`): `john@example.com` (John Mwangi, onboarding complete) and `grace.wanjiru@example.com`. Log in as one and try opening the other's farm id to see the 403.
+
+**What is intentionally not built.** Admin / Agronomist authentication, email verification, password reset, MFA / OAuth / SMS, refresh tokens, login rate limiting and account lockout. These are future production features.
+
+**Prototype Demo Access — not production authentication.** The Farmer / Admin switcher is unchanged and clearly labelled. Because admin sign-in is out of scope, the admin endpoints (`/api/dashboard/*`, farmer list, CSV exports, request status updates) and requests with **no** session remain open, exactly as before, so the admin demo and "Try Demo Farmer Journey" keep working. Ownership is therefore enforced for **logged-in farmers**; locking the remaining endpoints down is the first job once admin authentication exists. Cookie sessions rely on `SameSite` plus a CORS allow-list for CSRF protection; a production deployment would add CSRF tokens if cross-site cookies (`COOKIE_SAME_SITE=none`) are used.
 
 ## Farm Intelligence Engine
 
@@ -204,6 +246,10 @@ Swagger UI: `http://localhost:4000/api/docs`
 
 | Method | Path | Purpose |
 |---|---|---|
+| POST | `/api/auth/register` | Create a farmer account, set the session cookie (`onboardingCompleted=false`) |
+| POST | `/api/auth/login` | Log in (generic `Invalid email or password.` on failure) |
+| POST | `/api/auth/logout` | Clear the session cookie |
+| GET | `/api/auth/me` | The logged-in farmer (+ linked farmer/farm ids); 401 when logged out |
 | POST | `/api/farmers` | Register farmer (generates `FS-KEN-…`) |
 | GET | `/api/farmers` | List: `search`, `county`, `crop`, `page`, `pageSize` |
 | GET | `/api/farmers/export` | CSV download (same `search`, `county`, `crop` filters as the list) |
@@ -231,7 +277,9 @@ Swagger UI: `http://localhost:4000/api/docs`
 | `FRONTEND_URL` | Allowed CORS origin(s), comma-separated |
 | `AI_API_KEY` | Anthropic key (optional; assistant degrades gracefully without it) |
 | `AI_MODEL` | Model ID, e.g. `claude-sonnet-4-6` |
-| `NODE_ENV` | `development` / `production` |
+| `JWT_SECRET` | Signs login tokens. **Required in production** (the API refuses to start without it); a clearly-labelled insecure fallback is used only in development |
+| `COOKIE_SAME_SITE` | `lax` (default) or `none` for cross-site deployments (forces `Secure`) |
+| `NODE_ENV` | `development` / `production` (production makes the login cookie `Secure`) |
 
 `frontend/.env.example`: `VITE_API_URL` is empty in development (Vite proxies `/api`); set to the API origin in production. No secrets ever reach the frontend.
 
@@ -249,7 +297,7 @@ cp .env.example .env            # add AI_API_KEY if you want the assistant
 npm install
 npx prisma generate
 npx prisma migrate deploy       # applies prisma/migrations
-npm run seed                    # John Mwangi + 9 demo farmers
+npm run seed                    # John Mwangi + 9 demo farmers (+ 2 demo logins, see Authentication)
 npm run start:dev               # http://localhost:4000/api (docs at /api/docs)
 
 # 3. Frontend (new terminal)
@@ -258,7 +306,7 @@ npm install
 npm run dev                     # http://localhost:5173
 ```
 
-Open the app and click **Try Demo Farmer Journey**, or **Start Farm Registration** (use **Fill demo data** on step 1 to enter John Mwangi's details). Switch to **Admin** with the Prototype Demo Access toggle.
+Open the app and click **Try Demo Farmer Journey** (no sign-in), **Log in** with a demo account, or **Start Farm Registration** to create your own account (use **Fill demo data** on step 1 to enter John Mwangi's details). Switch to **Admin** with the Prototype Demo Access toggle.
 
 ## Database Setup
 
@@ -270,7 +318,7 @@ Open the app and click **Try Demo Farmer Journey**, or **Start Farm Registration
 |---|---|---|
 | `npm run start:dev` | backend | API with reload |
 | `npm test` | backend | Jest unit tests |
-| `npm test` | frontend | Onboarding draft persistence tests (Node's built-in test runner, no extra dependency) |
+| `npm test` | frontend | Onboarding draft persistence and login/route-gating tests (Node's built-in test runner, no extra dependency) |
 | `npm run build && npm run start:prod` | backend | Production build |
 | `npm run dev` / `npm run build` | frontend | Dev server / production bundle |
 
@@ -278,7 +326,7 @@ Open the app and click **Try Demo Farmer Journey**, or **Start Farm Registration
 
 ## Deployment
 
-Frontend: any static host (`npm run build` → `dist/`) with `VITE_API_URL` set. Backend: any Node host or container with `DATABASE_URL`, `FRONTEND_URL`, `AI_API_KEY`, `AI_MODEL`; run `prisma migrate deploy` on release. Use a managed PostgreSQL. Replace the demo role switcher with real authentication before any real use.
+Frontend: any static host (`npm run build` → `dist/`) with `VITE_API_URL` set. Backend: any Node host or container with `DATABASE_URL`, `FRONTEND_URL`, `AI_API_KEY`, `AI_MODEL`; run `prisma migrate deploy` on release. Set a long random `JWT_SECRET` (and `COOKIE_SAME_SITE=none` only if the frontend and API are on different sites). Use a managed PostgreSQL. Replace the demo role switcher with real admin authentication before any real use.
 
 ## Scalability
 
@@ -358,14 +406,14 @@ Admins get an **Export CSV** button on the **Farmers** and **Service requests** 
 - The opportunity score is a prototype rules engine, not a validated agronomic rating.
 - AI advice is general decision support and must be validated by professionals.
 - No real weather, satellite, soil-lab or market-price integration.
-- No production authentication (role switcher only); no per-user authorisation on the API.
+- Farmer accounts exist, but **admin/agronomist authentication does not**: the role switcher is Prototype Demo Access, and admin endpoints plus no-session requests are open. Ownership is enforced for logged-in farmers only (see [Authentication](#authentication)). No email verification, password reset, refresh tokens or login rate limiting.
 - No AI rate limiting, per-user quotas, cost controls or AI usage monitoring (see [Scalability](#scalability)).
 - The admin map returns all farm markers in one response; viewport queries, clustering and pagination would be needed beyond demo-scale data.
 - No real payments and no buyer marketplace.
 - Map tiles depend on OpenStreetMap availability (the form still works with typed coordinates).
 - One insight per farm (no history); no audit log.
 - Offline support is limited to the app shell and a local onboarding draft; offline submissions, sync and conflict resolution are not implemented. A service worker only takes effect on production builds served over HTTPS (or localhost).
-- CSV export endpoints are not access-controlled (no production authentication) and are capped at 10,000 rows.
+- CSV export endpoints are not access-controlled (admin authentication is out of scope) and are capped at 10,000 rows.
 - The Action Plan explanation path was verified with a mocked AI provider only; it has not been exercised against a live model.
 - Seed data is fictional. Farm-level "soil test recent" uses a 24-month prototype threshold, not an agronomic standard.
 - The backend uses Prisma's engine-less client with the `pg` driver adapter (`engineType = "client"`), which is what the checked-in setup was verified against.

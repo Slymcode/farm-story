@@ -1,6 +1,8 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { AuthUser } from '../auth/auth.types';
+import { assertOwnsFarm } from '../auth/ownership';
 import { FarmInsightEngine, presentInsight } from './farm-insight.engine';
 
 @Injectable()
@@ -8,7 +10,8 @@ export class InsightService {
   constructor(private readonly prisma: PrismaService, private readonly engine: FarmInsightEngine) {}
 
   /** Runs the deterministic engine and upserts the single current insight for the farm. */
-  async generateForFarm(farmId: string) {
+  async generateForFarm(farmId: string, actor?: AuthUser) {
+    await assertOwnsFarm(this.prisma, actor, farmId);
     const farm = await this.prisma.farm.findUnique({ where: { id: farmId } });
     if (!farm) throw new NotFoundException('We could not find this farm.');
     const r = this.engine.generate(farm);
@@ -23,7 +26,8 @@ export class InsightService {
   }
 
   /** Serves the stored insight; only generates when none exists (no unnecessary recomputation). */
-  async getForFarm(farmId: string) {
+  async getForFarm(farmId: string, actor?: AuthUser) {
+    await assertOwnsFarm(this.prisma, actor, farmId);
     const existing = await this.prisma.farmInsight.findUnique({ where: { farmId } });
     return existing ? this.present(existing) : this.generateForFarm(farmId);
   }

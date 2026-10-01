@@ -66,7 +66,7 @@ describe('buildFarmUpdateData (PATCH semantics)', () => {
 
 describe('FarmService.update', () => {
   it('sends only the changed field to Prisma and refreshes the insight', async () => {
-    const farm = { id: 'f1', primaryCrop: 'COFFEE', coffeeVariety: ['SL28', 'Ruiru 11'], coffeeTrees: 1100, insight: null };
+    const farm = { id: 'f1', primaryCrop: 'COFFEE', coffeeVariety: ['SL28', 'Ruiru 11'], coffeeTrees: 1100, insight: null, farmer: { id: 'fr1', userId: null } };
     const prisma: any = { farm: { findUnique: jest.fn().mockResolvedValue(farm), update: jest.fn().mockResolvedValue(farm) } };
     const insights: any = { generateForFarm: jest.fn().mockResolvedValue(undefined) };
     await new FarmService(prisma, insights).update('f1', dto({ farmName: 'Updated Farm Name' }));

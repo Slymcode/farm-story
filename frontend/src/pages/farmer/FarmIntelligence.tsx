@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useLocation, useParams } from 'react-router-dom';
 import { HelpCircle, MapPin, PartyPopper, X } from 'lucide-react';
 import { useFarm, useFarmerRequests } from '@/api/hooks';
+import { useAuth } from '@/auth/AuthContext';
 import { ActionPlan } from '@/components/ActionPlan';
 import { AskFarmStory } from '@/components/AskFarmStory';
 import { InsightCard, ServiceRequestCard } from '@/components/Insights';
@@ -18,16 +19,24 @@ function Stat({ value, label }: { value: string; label: string }) {
   return <div className="rounded-xl bg-white p-3.5 ring-1 ring-cream-200"><p className="font-display text-xl font-bold text-forest-900 sm:text-2xl">{value}</p><p className="text-sm text-ink-500">{label}</p></div>;
 }
 
-export default function FarmIntelligence() {
-  const { farmId } = useParams();
+const SECTION_ID = { actions: 'action-plan', ask: 'ask-farm-story', requests: 'my-requests' } as const;
+
+/** `section` (from the farmer nav: Take Action / Ask AI / Service Requests) scrolls to that part of the same page. */
+export default function FarmIntelligence({ section }: { section?: keyof typeof SECTION_ID } = {}) {
+  const params = useParams();
+  const { user } = useAuth();
+  const farmId = params.farmId ?? user?.farmer?.farmId ?? undefined;
   const { state } = useLocation() as { state?: { welcome?: { name: string; farmerId: string } } };
   const farm = useFarm(farmId);
   const requests = useFarmerRequests(farm.data?.farmerId);
   const [scoreOpen, setScoreOpen] = useState(false);
   const [requestType, setRequestType] = useState<ServiceType | null>(null);
   const [welcome, setWelcome] = useState(!!state?.welcome);
+  useEffect(() => {
+    if (section && farm.data) document.getElementById(SECTION_ID[section])?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [section, farm.data]);
 
-  if (farm.isLoading) return <LoadingState label="Loading your farm" rows={4} />;
+  if (!farmId || farm.isLoading) return <LoadingState label="Loading your farm" rows={4} />;
   if (farm.isError || !farm.data) return <ErrorState message="We couldn't load your farm information. Please try again." onRetry={() => farm.refetch()} />;
 
   const f = farm.data, insight = f.insight, isCoffee = f.primaryCrop === 'COFFEE';
@@ -81,7 +90,7 @@ export default function FarmIntelligence() {
                 <SectionTitle hint="From the information you gave us.">What we noticed</SectionTitle>
                 <div className="space-y-3">{insight.insights.map((i) => <InsightCard key={i.title} item={i} />)}</div>
               </section>
-              <section>
+              <section id="action-plan" className="scroll-mt-24">
                 <SectionTitle hint="Your recommended next steps, in priority order. Prototype guidance — confirm important decisions with a qualified agronomist.">My Farm Action Plan</SectionTitle>
                 {insight.actionPlan?.length
                   ? <ActionPlan steps={insight.actionPlan} onRequest={setRequestType} />
@@ -111,8 +120,8 @@ export default function FarmIntelligence() {
             <SectionTitle>Challenges you reported</SectionTitle>
             {f.challenges.length ? <ul className="flex flex-wrap gap-2">{f.challenges.map((c) => <li key={c} className="rounded-full bg-earth-100 px-3.5 py-1.5 text-sm font-semibold text-earth-800">{challengeLabel(c)}</li>)}</ul> : <p className="text-ink-500">None reported.</p>}
           </section>
-          <AskFarmStory farmId={f.id} />
-          <section>
+          <div id="ask-farm-story" className="scroll-mt-24"><AskFarmStory farmId={f.id} /></div>
+          <section id="my-requests" className="scroll-mt-24">
             <SectionTitle>Your requests</SectionTitle>
             {requests.isLoading ? <LoadingState rows={2} /> : requests.isError ? <ErrorState message="We couldn't load your requests." onRetry={() => requests.refetch()} />
               : requests.data?.items.length ? <ul className="space-y-2.5">{requests.data.items.map((r) => <ServiceRequestCard key={r.id} r={r} />)}</ul>
@@ -123,7 +132,7 @@ export default function FarmIntelligence() {
 
       {insight && <ScoreDialog open={scoreOpen} onClose={() => setScoreOpen(false)} insight={insight} />}
       <RequestDialog type={requestType} farm={f} onClose={() => setRequestType(null)} />
-      <p className="text-center text-sm"><Link to="/register" className="font-medium text-forest-700 underline underline-offset-2">Register another farm</Link></p>
+      {!user && <p className="text-center text-sm"><Link to="/register" className="font-medium text-forest-700 underline underline-offset-2">Register another farm</Link></p>}
     </div>
   );
 }

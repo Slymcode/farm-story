@@ -1,13 +1,15 @@
 import { ShieldAlert } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '@/auth/AuthContext';
 import { useSession, type Role } from '@/lib/session';
 import { cx } from './ui';
 
 /** Role switcher. Clearly labelled as prototype access, not real authentication. */
 export function DemoAccess() {
   const { role, setRole, farmer } = useSession();
+  const { user } = useAuth();
   const nav = useNavigate();
-  const go = (r: Role) => { setRole(r); nav(r === 'admin' ? '/admin' : farmer ? `/farm/${farmer.farmId}` : '/'); };
+  const go = (r: Role) => { setRole(r); nav(r === 'admin' ? '/admin' : user ? '/farmer' : farmer ? `/farm/${farmer.farmId}` : '/'); };
   return (
     <div className="flex items-center gap-2" title="Prototype Demo Access — not production authentication.">
       <ShieldAlert className="hidden size-4 text-earth-600 sm:block" aria-hidden />

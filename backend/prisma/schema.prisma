@@ -39,10 +39,27 @@ enum RequestStatus {
   COMPLETED
   CANCELLED
 }
+enum UserRole {
+  FARMER
+}
 enum HealthStatus {
   STRONG_POSITION
   MODERATE_OPPORTUNITY
   HIGH_OPPORTUNITY
+}
+
+/// Login account. Credentials live here only (never on Farmer). Farmer-only for now; admin/agronomist auth is out of scope.
+model User {
+  id                  String   @id @default(uuid())
+  name                String
+  email               String   @unique
+  passwordHash        String
+  role                UserRole @default(FARMER)
+  onboardingCompleted Boolean  @default(false)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  farmer Farmer?
 }
 
 /// Atomic counters used to mint human-readable IDs (FS-KEN-000001, FS-REQ-000001) without races.
@@ -61,9 +78,12 @@ model Farmer {
   county            String
   region            String?
   preferredLanguage String
+  /// Set when the farmer registered through an account. Seeded / legacy demo farmers have no user.
+  userId            String?  @unique
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
+  user            User?            @relation(fields: [userId], references: [id], onDelete: SetNull)
   farms           Farm[]
   serviceRequests ServiceRequest[]
 

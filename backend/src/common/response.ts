@@ -53,5 +53,5 @@ export class AllExceptionsFilter implements ExceptionFilter {
 }
 
 function defaultCode(status: number) {
-  return ({ 400: 'BAD_REQUEST', 404: 'NOT_FOUND', 409: 'CONFLICT', 503: 'SERVICE_UNAVAILABLE' } as Record<number, string>)[status] ?? 'ERROR';
+  return ({ 400: 'BAD_REQUEST', 401: 'UNAUTHORIZED', 403: 'FORBIDDEN', 404: 'NOT_FOUND', 409: 'CONFLICT', 503: 'SERVICE_UNAVAILABLE' } as Record<number, string>)[status] ?? 'ERROR';
 }

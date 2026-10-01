@@ -1,6 +1,8 @@
 import { Inject, Injectable, Logger, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AI_PROVIDER, AiProvider } from './ai.provider';
+import { AuthUser } from '../auth/auth.types';
+import { assertOwnsFarm } from '../auth/ownership';
 import { presentInsight } from '../insight/farm-insight.engine';
 import { SYSTEM_PROMPT, UNAVAILABLE_MESSAGE } from './ai.prompt';
 
@@ -42,7 +44,8 @@ export class AiService {
     };
   }
 
-  async ask(farmId: string, question: string) {
+  async ask(farmId: string, question: string, actor?: AuthUser) {
+    await assertOwnsFarm(this.prisma, actor, farmId); // a logged-in farmer can only ask about their own farm
     const context = await this.buildContext(farmId); // 404s before we ever touch the provider
     if (!this.provider.isConfigured()) throw new ServiceUnavailableException({ message: UNAVAILABLE_MESSAGE, error: 'AI_UNAVAILABLE' });
     try {
