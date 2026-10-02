@@ -19,6 +19,7 @@ Everything in the prototype is real end to end: React → REST API → Prisma �
 ## Features
 
 **Farmer**
+
 - Welcome screen with **Start Farm Registration** (create an account, then onboarding), **Log in**, and **Try Demo Farmer Journey** (opens seeded John Mwangi without signing in)
 - **Farmer accounts:** sign up, log in / out, continue unfinished onboarding later, a lightweight **My Farm** dashboard and a farmer navigation bar (see [Authentication](#authentication))
 - 5-step wizard (Farmer, Farm, Location, Challenges, Review) with per-step Zod validation, Back/Continue, and a draft saved in the browser so a refresh never loses answers
@@ -33,6 +34,7 @@ Everything in the prototype is real end to end: React → REST API → Prisma �
 - **Request timeline** and shared agronomist assessment for each request, **Farm Intelligence History** (score chart and data-only change explanations) and a public, privacy-safe **Farm Passport** with QR code
 
 **Administrator**
+
 - KPI cards: farmers, total acres, estimated coffee production, service requests
 - Farmers by location (bar list + map of farm markers)
 - Searchable / filterable / paginated farmer table → farmer profile (farmer, farm, map, intelligence, requests)
@@ -46,18 +48,49 @@ Everything in the prototype is real end to end: React → REST API → Prisma �
 
 ## Screenshots
 
-| Welcome | Farm Intelligence | Why this score? |
-|---|---|---|
-| ![](docs/screenshots/01-welcome-mobile.png) | ![](docs/screenshots/08-intelligence-mobile.png) | ![](docs/screenshots/09-why-score-mobile.png) |
+All captures are from the running app with the seeded demo data.
 
-| AI unavailable state | Request submitted | Admin (mobile) |
-|---|---|---|
-| ![](docs/screenshots/10-ai-unavailable-mobile.png) | ![](docs/screenshots/12-request-success-mobile.png) | ![](docs/screenshots/17-admin-mobile.png) |
+### Farmer (mobile)
 
-![Admin dashboard](docs/screenshots/13-admin-dashboard-desktop.png)
-![Admin farmer profile](docs/screenshots/15-admin-profile-desktop.png)
+| Welcome                                            | Log in                                          | Onboarding                                               |
+| -------------------------------------------------- | ----------------------------------------------- | -------------------------------------------------------- |
+| ![Welcome](docs/screenshots/01-welcome-mobile.png) | ![Log in](docs/screenshots/02-login-mobile.png) | ![Onboarding](docs/screenshots/03-onboarding-mobile.png) |
 
-*(Map tiles appear grey in these captures because they were taken in a sandbox without access to OpenStreetMap.)*
+| My Farm                                                     | Farm Intelligence                                                 | Why this score?                                             |
+| ----------------------------------------------------------- | ----------------------------------------------------------------- | ----------------------------------------------------------- |
+| ![My Farm](docs/screenshots/04-farmer-dashboard-mobile.png) | ![Farm Intelligence](docs/screenshots/05-intelligence-mobile.png) | ![Why this score](docs/screenshots/06-why-score-mobile.png) |
+
+| Action Plan                                                | Intelligence History                               | Farm Passport + QR                                              |
+| ---------------------------------------------------------- | -------------------------------------------------- | --------------------------------------------------------------- |
+| ![Action Plan](docs/screenshots/07-action-plan-mobile.png) | ![History](docs/screenshots/08-history-mobile.png) | ![Passport panel](docs/screenshots/09-farm-passport-mobile.png) |
+
+| Ask Farm Story (AI unavailable state)            | Request form                                                 | Request submitted                                                  |
+| ------------------------------------------------ | ------------------------------------------------------------ | ------------------------------------------------------------------ |
+| ![Ask AI](docs/screenshots/10-ask-ai-mobile.png) | ![Request form](docs/screenshots/11-request-form-mobile.png) | ![Request success](docs/screenshots/12-request-success-mobile.png) |
+
+| Request timeline                                             | Public Farm Passport                                               |
+| ------------------------------------------------------------ | ------------------------------------------------------------------ |
+| ![Timeline](docs/screenshots/13-request-timeline-mobile.png) | ![Public passport](docs/screenshots/14-passport-public-mobile.png) |
+
+### Administrator (desktop)
+
+![Admin dashboard](docs/screenshots/15-admin-dashboard.png)
+![Admin farmers](docs/screenshots/16-admin-farmers.png)
+![Admin farmer profile with intelligence history](docs/screenshots/17-admin-farmer-profile.png)
+![Admin requests](docs/screenshots/18-admin-requests.png)
+![Assign a request to an agronomist](docs/screenshots/19-admin-assign-request.png)
+![Admin agronomists](docs/screenshots/20-admin-agronomists.png)
+
+### Agronomist workspace
+
+![Agronomist dashboard](docs/screenshots/21-agronomist-dashboard.png)
+![Agronomist assessment form](docs/screenshots/22-agronomist-assessment.png)
+
+| Agronomist (mobile)                                                       | Admin (mobile)                                                  |
+| ------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| ![Agronomist mobile](docs/screenshots/23-agronomist-dashboard-mobile.png) | ![Admin mobile](docs/screenshots/24-admin-dashboard-mobile.png) |
+
+_(Map tiles appear grey in these captures because they were taken in a sandbox without access to OpenStreetMap.)_
 
 ## Architecture
 
@@ -65,18 +98,25 @@ Everything in the prototype is real end to end: React → REST API → Prisma �
 React (Vite) ──REST──> NestJS ──Prisma──> PostgreSQL
                           ├── AuthModule (bcrypt + JWT in HTTP-only cookie; farmer ownership checks)
                           ├── FarmInsightEngine  (deterministic rules → score, insights, recommendations)
-                          │      └── Action Plan (derived view of the recommendations; no new rules)
+                          │      ├── Action Plan (derived view of the recommendations; no new rules)
+                          │      └── FarmInsightSnapshot history (stored only when the result changes)
+                          ├── ServiceRequest workflow (state machine + immutable timeline events)
+                          ├── AgronomistModule (profiles, assignment, assessments, workspace)
+                          ├── PassportModule (public, allow-listed Farm Passport by random link)
                           ├── AiService ──> AiProvider (explains the score + Action Plan; optional, server-side only)
                           └── CSV export (farmers, service requests)
 
 Browser: service worker caches the app shell; onboarding draft lives in localStorage.
 ```
 
-**Why a modular monolith.** One deployable, one database transaction boundary, and one team-sized codebase is the fastest route to a reliable prototype. Modules (`farmer`, `farm`, `insight`, `service-request`, `ai`, `dashboard`, `prisma`) have clear boundaries, so high-load domains can be extracted later without a rewrite (see [Scalability](#scalability)). Microservices would add operational cost with no benefit at this size.
+**Why a modular monolith.** One deployable, one database transaction boundary, and one team-sized codebase is the fastest route to a reliable prototype. Modules (`auth`, `farmer`, `farm`, `insight`, `service-request`, `agronomist`, `passport`, `ai`, `dashboard`, `prisma`) have clear boundaries, so high-load domains can be extracted later without a rewrite (see [Scalability](#scalability)). Microservices would add operational cost with no benefit at this size.
 
 **Key design decisions**
+
 - **The AI never computes the score.** The engine is pure TypeScript with no dependencies; the AI only explains and advises on top of stored data.
-- **One current insight per farm**, upserted on regeneration (no duplicate rows; history is not kept, deliberately).
+- **One current insight per farm**, upserted on regeneration, plus an append-only **snapshot history** written only when the content hash changes (no duplicate snapshots).
+- **Explicit request state machine.** `PENDING → IN_REVIEW → ASSIGNED → COMPLETED` (`CANCELLED` from any open state). Assignment and completion go through dedicated endpoints; completion requires an assessment; compare-and-set updates return `409` on conflicting changes. Every transition writes an immutable timeline event.
+- **Privacy-safe sharing.** The public Farm Passport uses a random UUID (never the internal id) and an allow-list serializer; the owner can revoke the link.
 - **Safe IDs.** `FS-KEN-…` / `FS-REQ-…` come from a single atomic `INSERT … ON CONFLICT DO UPDATE … RETURNING` counter, so concurrent registrations can't collide (verified with 10 parallel requests). UUIDs remain the internal primary keys.
 - **Consistent API envelope** `{ success, message, data }` / `{ success:false, message, error }` with friendly per-field validation messages.
 - **The service request is checked server-side** to make sure the farm belongs to the farmer.
@@ -84,12 +124,15 @@ Browser: service worker caches the app shell; onboarding draft lives in localSto
 
 ## Technology Stack
 
-| Layer | Choice |
-|---|---|
+| Layer    | Choice                                                                                                                           |
+| -------- | -------------------------------------------------------------------------------------------------------------------------------- |
 | Frontend | React 19, Vite, TypeScript, Tailwind CSS 4, React Router, TanStack Query, React Hook Form + Zod, Lucide, Leaflet / React Leaflet |
-| Backend | NestJS 11, TypeScript, Prisma 6, PostgreSQL 16, class-validator, Swagger |
-| AI | Anthropic API behind an `AiProvider` interface |
-| Maps | OpenStreetMap (no paid key) |
+| Backend  | NestJS 11, TypeScript, Prisma 6, PostgreSQL 16, class-validator, Swagger                                                         |
+| AI       | Anthropic API behind an `AiProvider` interface                                                                                   |
+| Auth     | bcryptjs, JWT (`@nestjs/jwt` + Passport) in an HTTP-only cookie                                                                  |
+| Other    | `qrcode` (client-side QR for the Farm Passport), PWA service worker                                                              |
+| Testing  | Jest (backend), Node test runner (frontend), Playwright scripted browser checks                                                  |
+| Maps     | OpenStreetMap (no paid key)                                                                                                      |
 
 The UI components are hand-built on Tailwind (accessible native `<dialog>`, labelled fields, visible focus) instead of shadcn/ui, to keep the dependency footprint small for low-bandwidth users.
 
@@ -101,10 +144,12 @@ farm-story/
 ├── backend/
 │   ├── prisma/                 # schema.prisma, migrations/, seed.ts
 │   └── src/
-│       ├── farmer/  farm/  insight/  service-request/  ai/  dashboard/  prisma/  common/
-│       └── insight/farm-insight.engine.ts   # the rules engine
+│       ├── auth/  farmer/  farm/  insight/  service-request/  agronomist/  passport/  ai/  dashboard/  prisma/  common/
+│       ├── insight/farm-insight.engine.ts   # the rules engine
+│       ├── insight/insight-history.ts       # data-only change explanations
+│       └── service-request/request-workflow.ts   # state machine
 └── frontend/src/
-    ├── pages/{farmer,admin}/   layouts/   components/   api/   lib/   schemas/   types/
+    ├── pages/{farmer,admin,agronomist}/  PassportPage.tsx   layouts/   components/   api/   lib/   schemas/   types/
 ```
 
 ## Database Structure
@@ -155,6 +200,7 @@ erDiagram
         date lastHarvestDate "nullable"
         date lastSoilTestDate "nullable"
         enum[] challenges
+        string publicId UK "Farm Passport link id"
     }
     FARM_INSIGHT {
         uuid id PK
@@ -173,34 +219,78 @@ erDiagram
         enum type
         enum status
         string description "nullable"
+        uuid assignedAgronomistId FK "nullable"
+        datetime assignedAt "nullable"
+    }
+    AGRONOMIST {
+        uuid id PK
+        string fullName
+        string email UK
+        string phone "nullable"
+        string county "nullable"
+        enum[] specialties
+        enum status "ACTIVE | INACTIVE"
+    }
+    AGRONOMIST_ASSESSMENT {
+        uuid id PK
+        uuid serviceRequestId FK,UK
+        uuid agronomistId FK
+        string summary
+        string observations "nullable"
+        string recommendedActions "nullable"
+        boolean followUpRequired
+        date followUpDate "nullable"
+    }
+    SERVICE_REQUEST_EVENT {
+        uuid id PK
+        uuid serviceRequestId FK
+        enum type
+        enum fromStatus "nullable"
+        enum toStatus "nullable"
+        string actorRole
+        string actorName "nullable"
+        string message
+    }
+    FARM_INSIGHT_SNAPSHOT {
+        uuid id PK
+        uuid farmId FK
+        int opportunityScore
+        enum healthStatus
+        json scoreBreakdown
+        json recommendations
+        string contentHash
     }
 ```
 
-Indexes: `Farmer(county, createdAt)`, `Farm(farmerId, primaryCrop, createdAt)`, `ServiceRequest(farmerId, farmId, status, createdAt)`. Challenges use a PostgreSQL enum array for simplicity. `lastSoilTestDate` is an addition to the brief's field list, needed for the soil-test rule.
+Indexes: `Farmer(county, createdAt)`, `Farm(farmerId, primaryCrop, createdAt)`, `ServiceRequest(farmerId, farmId, status, createdAt, assignedAgronomistId+status)`, `ServiceRequestEvent(serviceRequestId, createdAt)`, `FarmInsightSnapshot(farmId, createdAt)`. Challenges use a PostgreSQL enum array for simplicity. `lastSoilTestDate` is an addition to the brief's field list, needed for the soil-test rule.
 
 ## Farmer Journey
 
-Welcome → **Create account** → **1 Farmer** → **2 Farm** → **3 Location** → **4 Challenges** → **5 Review** (nothing is saved until the farmer confirms) → Farm Intelligence → Take Action → optional AI assistant. "Insights" is deliberately *not* a data-entry step.
+Welcome → **Create account** → **1 Farmer** → **2 Farm** → **3 Location** → **4 Challenges** → **5 Review** (nothing is saved until the farmer confirms) → Farm Intelligence → Take Action → optional AI assistant. "Insights" is deliberately _not_ a data-entry step.
+
+After a service request is submitted the loop continues: **admin reviews and assigns an agronomist → agronomist submits an assessment and completes the request → the farmer sees the status, timeline and shared assessment**. The farmer can also review their **Intelligence History** and share a **Farm Passport** link or QR code.
 
 ## Authentication
 
 **What exists.** Farmers can **sign up, log in, log out and come back later**. After sign-up they go straight into the existing onboarding flow (no second onboarding system). If they stop part-way, `User.onboardingCompleted` stays `false`, the next login opens **Continue Onboarding** (their answers are saved on the device, per account), and the dashboard stays locked until the farm is saved. Once the farm exists, `onboardingCompleted` becomes `true` and login goes to the **My Farm** dashboard.
 
-| State | Where the farmer lands |
-|---|---|
-| Logged out | `/login` (or `/signup`) |
-| Logged in, onboarding not finished | `/farmer/onboarding` |
-| Logged in, onboarding finished | `/farmer/dashboard` |
+| State                              | Where the farmer lands  |
+| ---------------------------------- | ----------------------- |
+| Logged out                         | `/login` (or `/signup`) |
+| Logged in, onboarding not finished | `/farmer/onboarding`    |
+| Logged in, onboarding finished     | `/farmer/dashboard`     |
 
 Farmer routes: `/farmer/onboarding`, `/farmer/dashboard`, `/farmer/intelligence`, `/farmer/actions`, `/farmer/ask`, `/farmer/requests`.
 
 **How it works.**
+
 - **Passwords** are hashed with **bcrypt** (`bcryptjs`) and never returned or logged; there is one account per unique email, and credentials live only on `User` (never on `Farmer`).
 - **JWT** (`@nestjs/jwt` + Passport) carried in an **HTTP-only, `SameSite=Lax` cookie** (`Secure` in production). The browser's JavaScript cannot read it. Tokens last 7 days; there are no refresh tokens.
 - Login errors are generic (`Invalid email or password.`) for both an unknown email and a wrong password.
 - **Data model:** `User { id, name, email (unique), passwordHash, role (FARMER), onboardingCompleted }` with an optional one-to-one `Farmer.userId`. Seeded demo farmers have no user. Migration: `prisma/migrations/20261001000000_add_user_auth`.
 
 **Farmer ownership.** The server decides who a request belongs to, not the browser. When a farmer is logged in:
+
 - saving farmer details links the record to **their** account (resuming onboarding updates the same record, never creates a second one);
 - creating a farm or a service request uses **their** farmer, whatever `farmerId` the browser sends;
 - reading or updating a farmer, farm, insight, service request or AI answer that belongs to someone else returns **403**, and their request list is always scoped to their own requests;
@@ -208,27 +298,28 @@ Farmer routes: `/farmer/onboarding`, `/farmer/dashboard`, `/farmer/intelligence`
 
 **Demo logins** (created by `npm run seed`, password `Password123!`): `john@example.com` (John Mwangi, onboarding complete) and `grace.wanjiru@example.com`. Log in as one and try opening the other's farm id to see the 403.
 
-**What is intentionally not built.** Admin / Agronomist authentication, email verification, password reset, MFA / OAuth / SMS, refresh tokens, login rate limiting and account lockout. These are future production features.
+**What is intentionally not built.** Admin / Agronomist authentication (the agronomist selector is demo access only), email verification, password reset, MFA / OAuth / SMS, refresh tokens, login rate limiting and account lockout. These are future production features.
 
-**Prototype Demo Access — not production authentication.** The Farmer / Admin switcher is unchanged and clearly labelled. Because admin sign-in is out of scope, the admin endpoints (`/api/dashboard/*`, farmer list, CSV exports, request status updates) and requests with **no** session remain open, exactly as before, so the admin demo and "Try Demo Farmer Journey" keep working. Ownership is therefore enforced for **logged-in farmers**; locking the remaining endpoints down is the first job once admin authentication exists. Cookie sessions rely on `SameSite` plus a CORS allow-list for CSRF protection; a production deployment would add CSRF tokens if cross-site cookies (`COOKIE_SAME_SITE=none`) are used.
+**Prototype Demo Access — not production authentication.** The Farmer / Agronomist / Admin switcher is clearly labelled; the agronomist workspace uses a "viewing as" selector, not a login. Because admin sign-in is out of scope, the admin endpoints (`/api/dashboard/*`, farmer list, CSV exports, request status updates, agronomist management and assignment, the agronomist workspace) and requests with **no** session remain open, exactly as before, so the admin demo and "Try Demo Farmer Journey" keep working. Ownership is therefore enforced for **logged-in farmers**; locking the remaining endpoints down is the first job once admin authentication exists. Cookie sessions rely on `SameSite` plus a CORS allow-list for CSRF protection; a production deployment would add CSRF tokens if cross-site cookies (`COOKIE_SAME_SITE=none`) are used.
 
 ## Farm Intelligence Engine
 
 `backend/src/insight/farm-insight.engine.ts`: deterministic, documented, and configured from one object (`ENGINE_CONFIG`).
 
-**Score = sum of five dimensions (max 100).** Higher means *more opportunity for support*, not "worse farming".
+**Score = sum of five dimensions (max 100).** Higher means _more opportunity for support_, not "worse farming".
 
-| Dimension | Max | How points are earned |
-|---|---|---|
-| Production information | 25 | 25 if no production estimate; 15 if no harvest date; 10 if complete |
-| Reported challenges | 25 | Per challenge (low yield 8, pests 7, soil 6, water 6, buyers 5, finance 5, input costs 4), capped |
-| Farm data completeness | 15 | Share of tracked fields missing (soil date, harvest date, production, and for coffee: trees, variety) |
-| Tree / farm information | 15 | Baseline 6, +5 per missing coffee detail |
-| Potential intervention | 20 | 5 per Farm Story service the rules trigger |
+| Dimension               | Max | How points are earned                                                                                 |
+| ----------------------- | --- | ----------------------------------------------------------------------------------------------------- |
+| Production information  | 25  | 25 if no production estimate; 15 if no harvest date; 10 if complete                                   |
+| Reported challenges     | 25  | Per challenge (low yield 8, pests 7, soil 6, water 6, buyers 5, finance 5, input costs 4), capped     |
+| Farm data completeness  | 15  | Share of tracked fields missing (soil date, harvest date, production, and for coffee: trees, variety) |
+| Tree / farm information | 15  | Baseline 6, +5 per missing coffee detail                                                              |
+| Potential intervention  | 20  | 5 per Farm Story service the rules trigger                                                            |
 
 Status: ≤34 lower opportunity · 35–64 moderate · ≥65 high.
 
 **Recommendation rules**
+
 - No recent soil test (none, or older than 24 months) → **Soil testing**
 - Low yield / pests / water → **Agronomist assessment** (pests: diagnose before treatment)
 - Soil quality → **Soil test + Biochar assessment**
@@ -245,58 +336,58 @@ Every score has a breakdown (`scoreBreakdown`), the information available/missin
 - `POST /api/ai/farm-question` builds a **minimal context** from stored data (first name, county, crop, size, production, challenges, score, insights). **No phone, email or surname is sent.**
 - System prompt: cautious, no invented weather/soil/market/satellite data, says plainly when data is missing, refers serious disease or chemical decisions to an agronomist, **no specific pesticide/fertiliser products or rates**, ignores instructions inside the question that try to change its rules.
 - Server-side only; timeout 20 s with one retry. Provider is swappable via the `AiProvider` interface (one line in `AiModule`).
-- If `AI_API_KEY` is missing or the provider fails: *"The Farm Story assistant is temporarily unavailable. Your farm information and recommendations are still available."* with a Retry button. The rest of the app is unaffected.
+- If `AI_API_KEY` is missing or the provider fails: _"The Farm Story assistant is temporarily unavailable. Your farm information and recommendations are still available."_ with a Retry button. The rest of the app is unaffected.
 - The answer is rendered as plain text (paragraphs and bullets) with no HTML injection.
 
 ## API Endpoints
 
 Swagger UI: `http://localhost:4000/api/docs`
 
-| Method | Path | Purpose |
-|---|---|---|
-| POST | `/api/auth/register` | Create a farmer account, set the session cookie (`onboardingCompleted=false`) |
-| POST | `/api/auth/login` | Log in (generic `Invalid email or password.` on failure) |
-| POST | `/api/auth/logout` | Clear the session cookie |
-| GET | `/api/auth/me` | The logged-in farmer (+ linked farmer/farm ids); 401 when logged out |
-| POST | `/api/farmers` | Register farmer (generates `FS-KEN-…`) |
-| GET | `/api/farmers` | List: `search`, `county`, `crop`, `page`, `pageSize` |
-| GET | `/api/farmers/export` | CSV download (same `search`, `county`, `crop` filters as the list) |
-| GET | `/api/farmers/:id` | Farmer + farms + insight + requests (UUID or `FS-KEN-…`) |
-| POST | `/api/farms` | Register farm (insight generated automatically) |
-| GET / PATCH | `/api/farms/:id` | Get / update (update regenerates insight) |
-| GET | `/api/farms/:id/insight` | Current insight |
-| GET | `/api/farms/:id/insight/history` | Stored snapshots + data-only explanation of each change |
-| POST | `/api/farms/:id/insight/generate` | Regenerate (upsert) |
-| POST | `/api/service-requests` | Create request (`FS-REQ-…`, status PENDING) |
-| GET | `/api/service-requests` | List: `status`, `farmerId`, `outstanding` |
-| GET | `/api/service-requests/export` | CSV download (`status` or `outstanding` filter) |
-| GET | `/api/service-requests/:id` | Get one |
-| PATCH | `/api/service-requests/:id/status` | Manual status change (admin): only `IN_REVIEW` / `CANCELLED`, along valid transitions |
-| POST | `/api/service-requests/:id/assign` | Assign / reassign an active agronomist (admin) |
-| GET | `/api/service-requests/:id/timeline` | Lifecycle events (farmers: own requests only) |
-| GET / POST / PATCH | `/api/agronomists` `/:id` | List / add / update (incl. ACTIVE / INACTIVE) agronomists (admin) |
-| GET | `/api/agronomists/:id/dashboard` | Workspace KPIs from real data |
-| GET | `/api/agronomists/:id/requests` `/:requestId` | Assigned requests / one request (403 if not theirs) |
-| POST | `/api/agronomists/:id/requests/:requestId/assessment` `/complete` | Submit assessment / complete request |
-| GET | `/api/passport/:publicId` | Public Farm Passport (allow-listed fields only) |
-| POST | `/api/farms/:id/passport/reset` | New public id; old link / QR stop working (owner) |
-| POST | `/api/ai/farm-question` | Ask the assistant |
-| GET | `/api/dashboard/summary` `/locations` `/recent-farmers` `/service-requests` | Admin data |
+| Method             | Path                                                                        | Purpose                                                                               |
+| ------------------ | --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| POST               | `/api/auth/register`                                                        | Create a farmer account, set the session cookie (`onboardingCompleted=false`)         |
+| POST               | `/api/auth/login`                                                           | Log in (generic `Invalid email or password.` on failure)                              |
+| POST               | `/api/auth/logout`                                                          | Clear the session cookie                                                              |
+| GET                | `/api/auth/me`                                                              | The logged-in farmer (+ linked farmer/farm ids); 401 when logged out                  |
+| POST               | `/api/farmers`                                                              | Register farmer (generates `FS-KEN-…`)                                                |
+| GET                | `/api/farmers`                                                              | List: `search`, `county`, `crop`, `page`, `pageSize`                                  |
+| GET                | `/api/farmers/export`                                                       | CSV download (same `search`, `county`, `crop` filters as the list)                    |
+| GET                | `/api/farmers/:id`                                                          | Farmer + farms + insight + requests (UUID or `FS-KEN-…`)                              |
+| POST               | `/api/farms`                                                                | Register farm (insight generated automatically)                                       |
+| GET / PATCH        | `/api/farms/:id`                                                            | Get / update (update regenerates insight)                                             |
+| GET                | `/api/farms/:id/insight`                                                    | Current insight                                                                       |
+| GET                | `/api/farms/:id/insight/history`                                            | Stored snapshots + data-only explanation of each change                               |
+| POST               | `/api/farms/:id/insight/generate`                                           | Regenerate (upsert)                                                                   |
+| POST               | `/api/service-requests`                                                     | Create request (`FS-REQ-…`, status PENDING)                                           |
+| GET                | `/api/service-requests`                                                     | List: `status`, `farmerId`, `outstanding`                                             |
+| GET                | `/api/service-requests/export`                                              | CSV download (`status` or `outstanding` filter)                                       |
+| GET                | `/api/service-requests/:id`                                                 | Get one                                                                               |
+| PATCH              | `/api/service-requests/:id/status`                                          | Manual status change (admin): only `IN_REVIEW` / `CANCELLED`, along valid transitions |
+| POST               | `/api/service-requests/:id/assign`                                          | Assign / reassign an active agronomist (admin)                                        |
+| GET                | `/api/service-requests/:id/timeline`                                        | Lifecycle events (farmers: own requests only)                                         |
+| GET / POST / PATCH | `/api/agronomists` `/:id`                                                   | List / add / update (incl. ACTIVE / INACTIVE) agronomists (admin)                     |
+| GET                | `/api/agronomists/:id/dashboard`                                            | Workspace KPIs from real data                                                         |
+| GET                | `/api/agronomists/:id/requests` `/:requestId`                               | Assigned requests / one request (403 if not theirs)                                   |
+| POST               | `/api/agronomists/:id/requests/:requestId/assessment` `/complete`           | Submit assessment / complete request                                                  |
+| GET                | `/api/passport/:publicId`                                                   | Public Farm Passport (allow-listed fields only)                                       |
+| POST               | `/api/farms/:id/passport/reset`                                             | New public id; old link / QR stop working (owner)                                     |
+| POST               | `/api/ai/farm-question`                                                     | Ask the assistant                                                                     |
+| GET                | `/api/dashboard/summary` `/locations` `/recent-farmers` `/service-requests` | Admin data                                                                            |
 
 ## Environment Variables
 
 `backend/.env.example` (copy to `.env`):
 
-| Variable | Purpose |
-|---|---|
-| `DATABASE_URL` | PostgreSQL connection string (matches docker-compose) |
-| `PORT` | API port (default 4000) |
-| `FRONTEND_URL` | Allowed CORS origin(s), comma-separated |
-| `AI_API_KEY` | Anthropic key (optional; assistant degrades gracefully without it) |
-| `AI_MODEL` | Model ID, e.g. `claude-sonnet-4-6` |
-| `JWT_SECRET` | Signs login tokens. **Required in production** (the API refuses to start without it); a clearly-labelled insecure fallback is used only in development |
-| `COOKIE_SAME_SITE` | `lax` (default) or `none` for cross-site deployments (forces `Secure`) |
-| `NODE_ENV` | `development` / `production` (production makes the login cookie `Secure`) |
+| Variable           | Purpose                                                                                                                                                |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `DATABASE_URL`     | PostgreSQL connection string (matches docker-compose)                                                                                                  |
+| `PORT`             | API port (default 4000)                                                                                                                                |
+| `FRONTEND_URL`     | Allowed CORS origin(s), comma-separated                                                                                                                |
+| `AI_API_KEY`       | Anthropic key (optional; assistant degrades gracefully without it)                                                                                     |
+| `AI_MODEL`         | Model ID, e.g. `claude-sonnet-4-6`                                                                                                                     |
+| `JWT_SECRET`       | Signs login tokens. **Required in production** (the API refuses to start without it); a clearly-labelled insecure fallback is used only in development |
+| `COOKIE_SAME_SITE` | `lax` (default) or `none` for cross-site deployments (forces `Secure`)                                                                                 |
+| `NODE_ENV`         | `development` / `production` (production makes the login cookie `Secure`)                                                                              |
 
 `frontend/.env.example`: `VITE_API_URL` is empty in development (Vite proxies `/api`); set to the API origin in production. No secrets ever reach the frontend.
 
@@ -314,7 +405,7 @@ cp .env.example .env            # add AI_API_KEY if you want the assistant
 npm install
 npx prisma generate
 npx prisma migrate deploy       # applies prisma/migrations
-npm run seed                    # John Mwangi + 9 demo farmers (+ 2 demo logins, see Authentication)
+npm run seed                    # John Mwangi + 9 demo farmers, 2 demo logins, 4 agronomists, sample assessments, history snapshots; prints John's Farm Passport link
 npm run start:dev               # http://localhost:4000/api (docs at /api/docs)
 
 # 3. Frontend (new terminal)
@@ -323,7 +414,7 @@ npm install
 npm run dev                     # http://localhost:5173
 ```
 
-Open the app and click **Try Demo Farmer Journey** (no sign-in), **Log in** with a demo account, or **Start Farm Registration** to create your own account (use **Fill demo data** on step 1 to enter John Mwangi's details). Switch to **Admin** with the Prototype Demo Access toggle.
+Open the app and click **Try Demo Farmer Journey** (no sign-in), **Log in** with a demo account, or **Start Farm Registration** to create your own account (use **Fill demo data** on step 1 to enter John Mwangi's details). Switch to **Agronomist** or **Admin** with the Prototype Demo Access toggle (pick who you are "viewing as" in the agronomist workspace).
 
 ## Database Setup
 
@@ -331,19 +422,37 @@ Open the app and click **Try Demo Farmer Journey** (no sign-in), **Log in** with
 
 ## Running the Application
 
-| Command | Where | What |
-|---|---|---|
-| `npm run start:dev` | backend | API with reload |
-| `npm test` | backend | Jest unit tests |
-| `npm test` | frontend | Onboarding draft persistence and login/route-gating tests (Node's built-in test runner, no extra dependency) |
-| `npm run build && npm run start:prod` | backend | Production build |
-| `npm run dev` / `npm run build` | frontend | Dev server / production bundle |
+| Command                               | Where    | What                                                                                                         |
+| ------------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------ |
+| `npm run start:dev`                   | backend  | API with reload                                                                                              |
+| `npm test`                            | backend  | Jest unit tests                                                                                              |
+| `npm test`                            | frontend | Onboarding draft persistence and login/route-gating tests (Node's built-in test runner, no extra dependency) |
+| `npm run build && npm run start:prod` | backend  | Production build                                                                                             |
+| `npm run dev` / `npm run build`       | frontend | Dev server / production bundle                                                                               |
 
-**Tests** (29, business logic first): engine (low yield, missing/old soil test, production-per-tree incl. 0 trees, score range 0–100 and weights sum to 100, multiple challenges, determinism), farmer validation, farm validation (size, coordinates, negatives, enums), service-request creation (valid, invalid, farm/farmer ownership, 404s).
+**Tests** (business logic first). Backend: **123 tests in 16 suites**; frontend: **16 Node tests**. Plus scripted Playwright browser checks for the new flow (42 checks) and farmer auth (47 checks), which are run by hand and are not part of `npm test`. Coverage areas:
+
+- Engine: low yield, missing/old soil test, production-per-tree incl. 0 trees, score range 0–100, weights sum to 100, multiple challenges, determinism
+- Farmer, farm and service-request validation and ownership (404/403 cases)
+- Request workflow: allowed/blocked transitions, assign, assessment, completion, `409` conflicts, timeline events
+- Agronomist service: create/update/deactivate, workspace queries, follow-ups due
+- Insight snapshots (stored only on change) and `explainChange` wording
+- Farm Passport: allow-listed fields, reset/revoke, unknown links
+- Frontend: workflow helpers, onboarding draft, route gating
 
 ## Deployment
 
-Frontend: any static host (`npm run build` → `dist/`) with `VITE_API_URL` set. Backend: any Node host or container with `DATABASE_URL`, `FRONTEND_URL`, `AI_API_KEY`, `AI_MODEL`; run `prisma migrate deploy` on release. Set a long random `JWT_SECRET` (and `COOKIE_SAME_SITE=none` only if the frontend and API are on different sites). Use a managed PostgreSQL. Replace the demo role switcher with real admin authentication before any real use.
+Frontend: any static host (`npm run build` → `dist/`) with `VITE_API_URL` set to the API origin. Backend: any Node host or container with `DATABASE_URL`, `FRONTEND_URL`, `AI_API_KEY`, `AI_MODEL`, `JWT_SECRET`; run `prisma migrate deploy` on release. Use a managed PostgreSQL.
+
+**Example: Render**
+
+1. Create a PostgreSQL instance; copy its internal connection string.
+2. **Web Service** (root `backend`): build `npm install && npx prisma generate && npm run build`; start `npx prisma migrate deploy && npm run start:prod`. Set `DATABASE_URL`, `JWT_SECRET` (long random), `FRONTEND_URL` (the static site's URL), and optionally `AI_API_KEY` / `AI_MODEL`.
+3. **Static Site** (root `frontend`): build `npm install && npm run build`; publish `dist`; set `VITE_API_URL` to the web service URL and add a rewrite of `/*` to `/index.html`.
+4. Run `npm run seed` once (Render shell) only if you want demo data; it is destructive.
+5. If the frontend and API are on different sites, set `COOKIE_SAME_SITE=none` (cookies are `Secure` in production).
+
+Replace the demo role switcher with real admin and agronomist authentication before any real use.
 
 ## Agronomist Workflow
 
@@ -363,13 +472,13 @@ PENDING ──► IN_REVIEW ──► ASSIGNED ──► COMPLETED        (any o
 
 **Follow-ups due** = assessments with a follow-up required whose date is overdue or within the next 7 days.
 
-**Prototype access.** The agronomist workspace has no login. A "Viewing as" selector chooses the agronomist; it sits under the *Prototype Demo Access — not production authentication* label.
+**Prototype access.** The agronomist workspace has no login. A "Viewing as" selector chooses the agronomist; it sits under the _Prototype Demo Access — not production authentication_ label.
 
 ## Farm Intelligence History
 
 Each time the deterministic engine runs (farm created, farm updated, regenerated) a `FarmInsightSnapshot` is stored **only if the result changed** (content hash of score, status, dimension points, recommended services and available information), so repeated refreshes do not create duplicates. The current insight stays one row per farm; history lives in snapshots.
 
-`GET /api/farms/:id/insight/history` returns snapshots (oldest first, last 50) and, for each, an explanation built by the pure function `explainChange`: which score dimensions moved, which information was added or removed, which suggested services appeared or disappeared. **Nothing in the explanation comes from AI or from guesses about the farm.** Wording is deliberately careful: a lower score means *fewer gaps were identified in the information recorded*, not that results improved; a higher one does not mean the farm is doing worse.
+`GET /api/farms/:id/insight/history` returns snapshots (oldest first, last 50) and, for each, an explanation built by the pure function `explainChange`: which score dimensions moved, which information was added or removed, which suggested services appeared or disappeared. **Nothing in the explanation comes from AI or from guesses about the farm.** Wording is deliberately careful: a lower score means _fewer gaps were identified in the information recorded_, not that results improved; a higher one does not mean the farm is doing worse.
 
 The chart is a small dependency-free SVG with a text list of the same data beneath it. Snapshots exist only from the point this feature was installed; the seed builds a real history for John Mwangi by running the engine on earlier versions of his farm data.
 
@@ -391,6 +500,7 @@ A public, login-free page at `/passport/:publicId` with a QR code, intended for 
 ## Scalability
 
 **Evolution path (no premature microservices).**
+
 1. **Modular monolith** (this prototype): React + NestJS + PostgreSQL.
 2. **Scale the infrastructure:** indexing, connection pooling (PgBouncer), read replicas, Redis caching, object storage, background queues, CDN, monitoring, horizontal API scaling.
 3. **Extract only where load justifies it:** AI recommendation, weather, satellite, payments, marketplace, notifications, each as its own service, using async processing for satellite/weather ingestion, batch AI, notifications, reports and analytics. Growth in users alone does not require microservices.
@@ -400,6 +510,7 @@ A public, login-free page at `/passport/:publicId` with a QR code, intended for 
 **Millions of farm records.** Proper indexes and query plans; pagination everywhere (cursor-based for large tables); partitioning only where justified (e.g. by time for events/insights history); read replicas for admin/analytics; archival of old requests; object storage for files; analytics read models kept separate from the transactional schema.
 
 **Large maps (100,000+ farms).** The prototype's admin map endpoint (`GET /api/dashboard/locations`) deliberately returns every farm marker in one response, which is simple and fine for a demo-sized dataset. It would not survive 100,000+ farms: the payload, the database query and the browser's marker rendering would all become bottlenecks. A production system would optimise by geographic viewport and zoom level instead of shipping every record:
+
 - **Viewport / bounding-box queries:** the client sends the visible bounds and zoom; the server returns only farms inside them (backed by a spatial index such as PostGIS `GIST`).
 - **Server-side filtering and pagination:** filter by county, crop, status or challenge on the server, and page or cap results rather than returning every farm record.
 - **Clustering and aggregation:** at low zoom return counts or grid/geohash aggregates (e.g. "312 farms in this cell"), and only individual markers once zoomed in.
@@ -408,18 +519,23 @@ A public, login-free page at `/passport/:publicId` with a QR code, intended for 
 The prototype intentionally keeps the map simple; the production design would make rendering cost depend on what is visible, not on the total number of farms.
 
 **Weather / satellite.**
+
 ```text
 External providers → Ingestion workers → Queue → Processing pipeline → Farm environmental data → Recommendation engine → Farmer / Admin
 ```
+
 Ingestion never blocks normal API requests.
 
 **AI at scale.**
+
 ```text
 Farm data → Feature extraction → Recommendation service → AI model/API → Recommendation store → Farmer
 ```
+
 Cache reusable recommendations, process expensive work asynchronously, and never call a model on a dashboard page load.
 
 **AI rate limiting and cost control (not implemented).** The prototype has no per-user AI quotas, no rate limiting, no cost controls and no detailed AI usage monitoring, so anyone who can reach the API can trigger model calls against the configured key. Production would add:
+
 - authenticated access to the AI endpoint;
 - per-user and per-application quotas;
 - rate limiting (per user and per IP) at the API gateway or application layer;
@@ -428,6 +544,7 @@ Cache reusable recommendations, process expensive work asynchronously, and never
 - potentially asynchronous AI processing (queue + worker) for expensive or bulk workflows.
 
 **At 100,000 farmers and 500 agronomists** (summary of the points above, applied to the new features):
+
 - Request lists, the agronomist workspace and history are already index-backed (`ServiceRequest(assignedAgronomistId, status)`, `ServiceRequestEvent(serviceRequestId, createdAt)`, `FarmInsightSnapshot(farmId, createdAt)`). Move lists to cursor pagination.
 - Dashboard KPIs are `count` queries today; at scale cache or materialise them on a schedule. Redis only where it is justified (hot aggregates, rate limiting), not by default.
 - Read replicas for admin/analytics queries; partition `ServiceRequestEvent` and `FarmInsightSnapshot` by time once they reach hundreds of millions of rows.
@@ -446,9 +563,10 @@ Cache reusable recommendations, process expensive work asynchronously, and never
 ## Offline / PWA
 
 **What the prototype does.**
+
 - **Installable PWA:** web app manifest, icons (including maskable) and a service worker. Browsers that support it offer "Install app".
 - **Offline application shell:** the service worker precaches the built HTML, JS, CSS and icons, so the app opens and navigates without a connection. Navigations are network-first with the cached shell as fallback; hashed assets are cache-first. It is registered in production builds only (not in `vite dev`).
-- **Online / offline awareness:** a header indicator shows **Online** or **Offline — your draft is saved on this device**. During onboarding the form also says *"You're offline. Your draft is saved on this device."* and, when the connection returns, *"You're back online."*
+- **Online / offline awareness:** a header indicator shows **Online** or **Offline — your draft is saved on this device**. During onboarding the form also says _"You're offline. Your draft is saved on this device."_ and, when the connection returns, _"You're back online."_
 - **Locally persisted onboarding draft:** every change is saved to `localStorage` (`lib/draft.ts`, unit-tested), so a dropped connection, refresh or closed tab does not lose answers. The draft is cleared after a successful registration.
 
 **What it deliberately does not do.** The API, map tiles and all data are never cached or queued. **Farm registration cannot be submitted offline**: the farmer finishes the form when connectivity returns and submits normally (a failed save never registers the farmer twice). Offline service requests, background sync and conflict handling are not implemented.
@@ -458,6 +576,7 @@ Cache reusable recommendations, process expensive work asynchronously, and never
 ## Data Export
 
 Admins get an **Export CSV** button on the **Farmers** and **Service requests** pages.
+
 - **Farmers CSV** (`GET /api/farmers/export`): Farmer ID, Full Name, Mobile, Email, County, Preferred Language, Farm Name, Farm Size, Primary Crop, Coffee Variety, Coffee Trees, Estimated Annual Production, Last Harvest Date, Challenges, Opportunity Score, Insight Status, Created At. One row per farm.
 - **Service requests CSV** (`GET /api/service-requests/export`): Request ID, Farmer ID, Farmer Name, Farm Name, Request Type, Status, Description, Created At, Updated At.
 - Data is read from PostgreSQL on the server at download time, so it always reflects the current database. The export **respects the filters currently applied** (farmer search/county/crop; request status).
@@ -467,9 +586,10 @@ Admins get an **Export CSV** button on the **Farmers** and **Service requests** 
 ## Farm Action Plan
 
 **My Farm Action Plan** turns the engine's recommendations into a numbered, prioritised list on the Farm Intelligence page, each with its reason and a button that opens the existing service-request flow.
+
 - **The deterministic `FarmInsightEngine` remains authoritative.** The plan is a derived view (`insight/action-plan.ts`) of the engine's recommendations; it adds no rules. Each service step is one engine recommendation with the engine's own reason. If the engine returns no recommendations, there is no plan: nothing is invented to fill slots.
 - **Priority:** services backed by more reported reasons come first; ties keep the engine's order. A final **Review production efficiency** step (no button) appears only when the engine has calculated a production metric, and uses the engine's benchmark note; it makes no judgement about whether production is good or bad.
-- **AI is an explanation and conversation layer only.** Ask Farm Story (the existing assistant, not a new chatbot) now receives the farm context, score, score breakdown, insights, recommendations and action plan on the server, and the suggested question *"Why are these my recommended next steps?"* explains them in plain language. The prompt forbids changing the score or plan, inventing soil, weather, satellite or market data, claiming certainty, or saying a service has been booked or completed. Personal identifiers (surname, phone, email) are never sent. The API key never reaches the browser.
+- **AI is an explanation and conversation layer only.** Ask Farm Story (the existing assistant, not a new chatbot) now receives the farm context, score, score breakdown, insights, recommendations and action plan on the server, and the suggested question _"Why are these my recommended next steps?"_ explains them in plain language. The prompt forbids changing the score or plan, inventing soil, weather, satellite or market data, claiming certainty, or saying a service has been booked or completed. Personal identifiers (surname, phone, email) are never sent. The API key never reaches the browser.
 
 ## Known Limitations
 

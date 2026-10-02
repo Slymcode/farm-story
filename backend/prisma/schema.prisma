@@ -1,63 +1,12 @@
 generator client {
   provider        = "prisma-client-js"
+  previewFeatures = ["driverAdapters", "queryCompiler"]
   engineType      = "client"
-  previewFeatures = ["queryCompiler", "driverAdapters"]
 }
 
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
-}
-
-enum CropType {
-  COFFEE
-  MAIZE
-  BEANS
-  TEA
-  OTHER
-}
-enum Challenge {
-  LOW_YIELD
-  PESTS_DISEASE
-  SOIL_QUALITY
-  WATER_AVAILABILITY
-  BUYER_ACCESS
-  FINANCE_ACCESS
-  INPUT_COSTS
-}
-enum ServiceType {
-  AGRONOMIST_VISIT
-  SOIL_TEST
-  BIOCHAR_ASSESSMENT
-  COFFEE_QUALITY_ASSESSMENT
-  BUYER_OFFTAKE_SUPPORT
-}
-enum RequestStatus {
-  PENDING
-  IN_REVIEW
-  ASSIGNED
-  COMPLETED
-  CANCELLED
-}
-enum UserRole {
-  FARMER
-}
-enum AgronomistStatus {
-  ACTIVE
-  INACTIVE
-}
-enum RequestEventType {
-  REQUEST_CREATED
-  REQUEST_REVIEWED
-  AGRONOMIST_ASSIGNED
-  ASSESSMENT_SUBMITTED
-  REQUEST_COMPLETED
-  REQUEST_CANCELLED
-}
-enum HealthStatus {
-  STRONG_POSITION
-  MODERATE_OPPORTUNITY
-  HIGH_OPPORTUNITY
 }
 
 /// Login account. Credentials live here only (never on Farmer). Farmer-only for now; admin/agronomist auth is out of scope.
@@ -70,8 +19,7 @@ model User {
   onboardingCompleted Boolean  @default(false)
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
-
-  farmer Farmer?
+  farmer              Farmer?
 }
 
 /// Atomic counters used to mint human-readable IDs (FS-KEN-000001, FS-REQ-000001) without races.
@@ -81,30 +29,29 @@ model Counter {
 }
 
 model Farmer {
-  id                String   @id @default(uuid())
-  farmerId          String   @unique
+  id                String           @id @default(uuid())
+  farmerId          String           @unique
   fullName          String
   mobileNumber      String
   email             String?
-  country           String   @default("Kenya")
+  country           String           @default("Kenya")
   county            String
   region            String?
   preferredLanguage String
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
   /// Set when the farmer registered through an account. Seeded / legacy demo farmers have no user.
-  userId            String?  @unique
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
-
-  user            User?            @relation(fields: [userId], references: [id], onDelete: SetNull)
-  farms           Farm[]
-  serviceRequests ServiceRequest[]
+  userId            String?          @unique
+  farms             Farm[]
+  user              User?            @relation(fields: [userId], references: [id])
+  serviceRequests   ServiceRequest[]
 
   @@index([county])
   @@index([createdAt])
 }
 
 model Farm {
-  id                          String      @id @default(uuid())
+  id                          String                @id @default(uuid())
   farmerId                    String
   farmName                    String
   location                    String
@@ -118,15 +65,14 @@ model Farm {
   lastHarvestDate             DateTime?
   lastSoilTestDate            DateTime?
   challenges                  Challenge[]
+  createdAt                   DateTime              @default(now())
+  updatedAt                   DateTime              @updatedAt
   /// Non-guessable id used by the public Farm Passport URL (never expose the internal id there).
-  publicId                    String      @unique @default(uuid())
-  createdAt                   DateTime    @default(now())
-  updatedAt                   DateTime    @updatedAt
-
-  farmer          Farmer            @relation(fields: [farmerId], references: [id], onDelete: Cascade)
-  insight         FarmInsight?
-  insightHistory  FarmInsightSnapshot[]
-  serviceRequests ServiceRequest[]
+  publicId                    String                @unique @default(uuid())
+  farmer                      Farmer                @relation(fields: [farmerId], references: [id], onDelete: Cascade)
+  insight                     FarmInsight?
+  insightHistory              FarmInsightSnapshot[]
+  serviceRequests             ServiceRequest[]
 
   @@index([farmerId])
   @@index([primaryCrop])
@@ -145,28 +91,26 @@ model FarmInsight {
   scoreBreakdown   Json?
   generatedAt      DateTime     @default(now())
   updatedAt        DateTime     @updatedAt
-
-  farm Farm @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  farm             Farm         @relation(fields: [farmId], references: [id], onDelete: Cascade)
 }
 
 model ServiceRequest {
-  id          String        @id @default(uuid())
-  requestId   String        @unique
-  farmerId    String
-  farmId      String
-  type        ServiceType
-  status      RequestStatus @default(PENDING)
-  description String?
+  id                   String                @id @default(uuid())
+  requestId            String                @unique
+  farmerId             String
+  farmId               String
+  type                 ServiceType
+  status               RequestStatus         @default(PENDING)
+  description          String?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
   assignedAgronomistId String?
   assignedAt           DateTime?
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
-
-  farmer     Farmer      @relation(fields: [farmerId], references: [id], onDelete: Cascade)
-  farm       Farm        @relation(fields: [farmId], references: [id], onDelete: Cascade)
-  agronomist Agronomist? @relation(fields: [assignedAgronomistId], references: [id], onDelete: SetNull)
-  assessment AgronomistAssessment?
-  events     ServiceRequestEvent[]
+  assessment           AgronomistAssessment?
+  agronomist           Agronomist?           @relation(fields: [assignedAgronomistId], references: [id])
+  farm                 Farm                  @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  farmer               Farmer                @relation(fields: [farmerId], references: [id], onDelete: Cascade)
+  events               ServiceRequestEvent[]
 
   @@index([farmerId])
   @@index([farmId])
@@ -177,37 +121,35 @@ model ServiceRequest {
 
 /// Field agronomist profile. Prototype: no login; admin manages, workspace uses a "viewing as" selector.
 model Agronomist {
-  id             String           @id @default(uuid())
-  fullName       String
-  email          String           @unique
-  phone          String?
-  county         String?
-  specialties    ServiceType[]
-  status         AgronomistStatus @default(ACTIVE)
-  createdAt      DateTime         @default(now())
-  updatedAt      DateTime         @updatedAt
-
-  requests    ServiceRequest[]
+  id          String                 @id @default(uuid())
+  fullName    String
+  email       String                 @unique
+  phone       String?
+  county      String?
+  specialties ServiceType[]
+  status      AgronomistStatus       @default(ACTIVE)
+  createdAt   DateTime               @default(now())
+  updatedAt   DateTime               @updatedAt
   assessments AgronomistAssessment[]
+  requests    ServiceRequest[]
 
   @@index([status])
 }
 
 /// One field assessment per service request, written by the assigned agronomist.
 model AgronomistAssessment {
-  id                 String    @id @default(uuid())
-  serviceRequestId   String    @unique
+  id                 String         @id @default(uuid())
+  serviceRequestId   String         @unique
   agronomistId       String
   summary            String
   observations       String?
   recommendedActions String?
-  followUpRequired   Boolean   @default(false)
+  followUpRequired   Boolean        @default(false)
   followUpDate       DateTime?
-  createdAt          DateTime  @default(now())
-  updatedAt          DateTime  @updatedAt
-
-  serviceRequest ServiceRequest @relation(fields: [serviceRequestId], references: [id], onDelete: Cascade)
-  agronomist     Agronomist     @relation(fields: [agronomistId], references: [id], onDelete: Restrict)
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+  agronomist         Agronomist     @relation(fields: [agronomistId], references: [id])
+  serviceRequest     ServiceRequest @relation(fields: [serviceRequestId], references: [id], onDelete: Cascade)
 
   @@index([agronomistId])
   @@index([followUpRequired, followUpDate])
@@ -224,8 +166,7 @@ model ServiceRequestEvent {
   actorName        String?
   message          String
   createdAt        DateTime         @default(now())
-
-  serviceRequest ServiceRequest @relation(fields: [serviceRequestId], references: [id], onDelete: Cascade)
+  serviceRequest   ServiceRequest   @relation(fields: [serviceRequestId], references: [id], onDelete: Cascade)
 
   @@index([serviceRequestId, createdAt])
 }
@@ -241,8 +182,65 @@ model FarmInsightSnapshot {
   /// Hash of the engine inputs + output, used to avoid storing identical snapshots.
   contentHash      String
   createdAt        DateTime     @default(now())
-
-  farm Farm @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  farm             Farm         @relation(fields: [farmId], references: [id], onDelete: Cascade)
 
   @@index([farmId, createdAt])
+}
+
+enum CropType {
+  COFFEE
+  MAIZE
+  BEANS
+  TEA
+  OTHER
+}
+
+enum Challenge {
+  LOW_YIELD
+  PESTS_DISEASE
+  SOIL_QUALITY
+  WATER_AVAILABILITY
+  BUYER_ACCESS
+  FINANCE_ACCESS
+  INPUT_COSTS
+}
+
+enum ServiceType {
+  AGRONOMIST_VISIT
+  SOIL_TEST
+  BIOCHAR_ASSESSMENT
+  COFFEE_QUALITY_ASSESSMENT
+  BUYER_OFFTAKE_SUPPORT
+}
+
+enum RequestStatus {
+  PENDING
+  IN_REVIEW
+  ASSIGNED
+  COMPLETED
+  CANCELLED
+}
+
+enum UserRole {
+  FARMER
+}
+
+enum AgronomistStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum RequestEventType {
+  REQUEST_CREATED
+  REQUEST_REVIEWED
+  AGRONOMIST_ASSIGNED
+  ASSESSMENT_SUBMITTED
+  REQUEST_COMPLETED
+  REQUEST_CANCELLED
+}
+
+enum HealthStatus {
+  STRONG_POSITION
+  MODERATE_OPPORTUNITY
+  HIGH_OPPORTUNITY
 }

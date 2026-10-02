@@ -92,11 +92,8 @@ export default function FarmerLayout() {
       <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-6 sm:py-8">
         <Outlet />
       </main>
-      <footer className="border-t border-cream-200 px-4 py-5 text-center text-xs text-ink-500">
-        Farm Story prototype. Farmer accounts are real; the Farmer / Admin
-        switcher is Prototype Demo Access — not production authentication.
-        Guidance is decision support, not a substitute for a qualified
-        agronomist.
+      <footer className="border-t border-cream-200 px-4 py-4 text-center text-[11px] leading-5 text-ink-500">
+        <div>© 2026 Farm Story.</div>
       </footer>
     </div>
   );
