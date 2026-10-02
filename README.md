@@ -48,49 +48,110 @@ Everything in the prototype is real end to end: React → REST API → Prisma �
 
 ## Screenshots
 
-All captures are from the running app with the seeded demo data.
+The captures below are grouped so full-page mobile images do not stretch the README. The screenshots folder only has an older welcome-page capture, so it is omitted rather than showing the superseded landing design.
 
-### Farmer (mobile)
+<details>
+<summary>Farmer and onboarding</summary>
 
-| Welcome                                            | Log in                                          | Onboarding                                               |
-| -------------------------------------------------- | ----------------------------------------------- | -------------------------------------------------------- |
-| ![Welcome](docs/screenshots/01-welcome-mobile.png) | ![Log in](docs/screenshots/02-login-mobile.png) | ![Onboarding](docs/screenshots/03-onboarding-mobile.png) |
+**Sign in**
 
-| My Farm                                                     | Farm Intelligence                                                 | Why this score?                                             |
-| ----------------------------------------------------------- | ----------------------------------------------------------------- | ----------------------------------------------------------- |
-| ![My Farm](docs/screenshots/04-farmer-dashboard-mobile.png) | ![Farm Intelligence](docs/screenshots/05-intelligence-mobile.png) | ![Why this score](docs/screenshots/06-why-score-mobile.png) |
+<img src="docs/screenshots/mobile-login.png" alt="Farmer sign-in on mobile" width="320">
 
-| Action Plan                                                | Intelligence History                               | Farm Passport + QR                                              |
-| ---------------------------------------------------------- | -------------------------------------------------- | --------------------------------------------------------------- |
-| ![Action Plan](docs/screenshots/07-action-plan-mobile.png) | ![History](docs/screenshots/08-history-mobile.png) | ![Passport panel](docs/screenshots/09-farm-passport-mobile.png) |
+**Create account**
 
-| Ask Farm Story (AI unavailable state)            | Request form                                                 | Request submitted                                                  |
-| ------------------------------------------------ | ------------------------------------------------------------ | ------------------------------------------------------------------ |
-| ![Ask AI](docs/screenshots/10-ask-ai-mobile.png) | ![Request form](docs/screenshots/11-request-form-mobile.png) | ![Request success](docs/screenshots/12-request-success-mobile.png) |
+<img src="docs/screenshots/mobile-signup.png" alt="Create farmer account on mobile" width="320">
 
-| Request timeline                                             | Public Farm Passport                                               |
-| ------------------------------------------------------------ | ------------------------------------------------------------------ |
-| ![Timeline](docs/screenshots/13-request-timeline-mobile.png) | ![Public passport](docs/screenshots/14-passport-public-mobile.png) |
+**Onboarding**
 
-### Administrator (desktop)
+<img src="docs/screenshots/auth-onboarding-after-signup.png" alt="Farmer onboarding form" width="800">
 
-![Admin dashboard](docs/screenshots/15-admin-dashboard.png)
-![Admin farmers](docs/screenshots/16-admin-farmers.png)
-![Admin farmer profile with intelligence history](docs/screenshots/17-admin-farmer-profile.png)
-![Admin requests](docs/screenshots/18-admin-requests.png)
-![Assign a request to an agronomist](docs/screenshots/19-admin-assign-request.png)
-![Admin agronomists](docs/screenshots/20-admin-agronomists.png)
+**My Farm**
 
-### Agronomist workspace
+<img src="docs/screenshots/mobile-dashboard.png" alt="Farmer dashboard on mobile" width="320">
 
-![Agronomist dashboard](docs/screenshots/21-agronomist-dashboard.png)
-![Agronomist assessment form](docs/screenshots/22-agronomist-assessment.png)
+</details>
 
-| Agronomist (mobile)                                                       | Admin (mobile)                                                  |
-| ------------------------------------------------------------------------- | --------------------------------------------------------------- |
-| ![Agronomist mobile](docs/screenshots/23-agronomist-dashboard-mobile.png) | ![Admin mobile](docs/screenshots/24-admin-dashboard-mobile.png) |
+<details>
+<summary>Farm intelligence and farmer tools</summary>
 
-_(Map tiles appear grey in these captures because they were taken in a sandbox without access to OpenStreetMap.)_
+**Farm Intelligence and Action Plan**
+
+<img src="docs/screenshots/mobile-action-plan.png" alt="Farm Intelligence with the farmer's action plan on mobile" width="320">
+
+**Why this score?**
+
+<img src="docs/screenshots/09-why-score-mobile.png" alt="Farm Opportunity score explanation on mobile" width="320">
+
+**AI unavailable state**
+
+<img src="docs/screenshots/10-ai-unavailable-mobile.png" alt="Farm Story AI unavailable message on mobile" width="320">
+
+**Intelligence history**
+
+<img src="docs/screenshots/farmer-history.png" alt="Farm Intelligence history" width="800">
+
+</details>
+
+<details>
+<summary>Requests and Farm Passport</summary>
+
+**Request submitted**
+
+<img src="docs/screenshots/12-request-success-mobile.png" alt="Service request confirmation on mobile" width="320">
+
+**Request timeline**
+
+<img src="docs/screenshots/farmer-request-timeline.png" alt="Farmer service request timeline on mobile" width="320">
+
+**Farm Passport panel**
+
+<img src="docs/screenshots/farmer-passport-panel.png" alt="Farm Passport panel with QR code" width="320">
+
+**Public Farm Passport**
+
+<img src="docs/screenshots/passport-public-mobile.png" alt="Public Farm Passport on mobile" width="320">
+
+</details>
+
+<details>
+<summary>Administrator workspace</summary>
+
+**Dashboard**
+
+<img src="docs/screenshots/13-admin-dashboard-desktop.png" alt="Administrator dashboard" width="100%">
+
+**Farmers list and CSV export**
+
+<img src="docs/screenshots/admin-export.png" alt="Administrator farmers list with CSV export" width="100%">
+
+**Farmer profile**
+
+<img src="docs/screenshots/15-admin-profile-desktop.png" alt="Administrator farmer profile and farm intelligence" width="100%">
+
+**Request assignment**
+
+<img src="docs/screenshots/admin-request-assigned.png" alt="Administrator assigning a service request" width="100%">
+
+**Agronomist management**
+
+<img src="docs/screenshots/admin-agronomists.png" alt="Administrator agronomist management" width="100%">
+
+</details>
+
+<details>
+<summary>Agronomist workspace</summary>
+
+**Assigned requests**
+
+<img src="docs/screenshots/agronomist-dashboard.png" alt="Agronomist workspace dashboard" width="100%">
+
+**Request assessment**
+
+<img src="docs/screenshots/agronomist-request-detail.png" alt="Agronomist request assessment and timeline" width="100%">
+
+</details>
+
+_Map tiles appear grey in some captures because they were taken without access to OpenStreetMap._
 
 ## Architecture
 
